@@ -69,6 +69,14 @@ Platform/Intel/BoardModulePkg
 M: Eric Dong <eric.dong@intel.com>
 R: Liming Gao <liming.gao@intel.com>
 
+Platform/Intel/DebugFeaturePkg
+M: Eric Dong <eric.dong@intel.com>
+R: Liming Gao <liming.gao@intel.com>
+
+Platform/Intel/UserInterfaceFeaturePkg
+M: Dandan Bi <dandan.bi@intel.com>
+R: Liming Gao <liming.gao@intel.com>
+
 Platform/Intel/ClevoOpenBoardPkg
 M: Michael Kubacki <michael.a.kubacki@intel.com>
 M: Ankit Sinha <ankit.sinha@intel.com>
@@ -90,6 +98,10 @@ M: Shifei A Lu <shifei.a.lu@intel.com>
 M: Xiaohu Zhou <bowen.zhou@intel.com>
 M: Isaac W Oram <isaac.w.oram@intel.com>
 
+Platform/Intel/Tools
+M: Bob Feng <bob.c.feng@intel.com>
+M: Liming Gao <liming.gao@intel.com>
+
 Platform/Marvell
 R: Marcin Wojtas <mw@semihalf.com>
 
@@ -100,6 +112,10 @@ Silicon
 M: Ard Biesheuvel <ard.biesheuvel@linaro.org>
 M: Leif Lindholm <leif.lindholm@linaro.org>
 M: Michael D Kinney <michael.d.kinney@intel.com>
+
+Silicon/Intel/IntelSiliconPkg
+M: Ray Ni <ray.ni@intel.com>
+M: Rangasai V Chaganty <rangasai.v.chaganty@intel.com>
 
 Silicon/Intel/QuarkSocPkg
 M: Michael D Kinney <michael.d.kinney@intel.com>
@@ -128,6 +144,10 @@ Silicon/Intel/PurleySktPkg
 M: Gillispie, Thad <thad.gillispie@intel.com>
 M: Bu, Daocheng <daocheng.bu@intel.com>
 M: Oram, Isaac W <isaac.w.oram@intel.com>
+
+Silicon/Intel/Tools
+M: Bob Feng <bob.c.feng@intel.com>
+M: Liming Gao <liming.gao@intel.com>
 
 Silicon/Marvell
 R: Marcin Wojtas <mw@semihalf.com>

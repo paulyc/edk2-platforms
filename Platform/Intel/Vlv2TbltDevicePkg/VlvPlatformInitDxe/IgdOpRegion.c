@@ -1,12 +1,9 @@
 
 /*++
 
-Copyright (c)  2011  - 2018, Intel Corporation. All rights reserved
-                                                                                   
+Copyright (c)  2011  - 2019, Intel Corporation. All rights reserved
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
-
-                                                                                   
-
 
 Module Name:
 
@@ -35,18 +32,14 @@ Abstract:
 
 #include "IgdOpRegion.h"
 #include "VlvPlatformInit.h"
-#include <FrameworkDxe.h>
-#include <Uefi.h>
+#include <PiDxe.h>
 #include <PchRegs.h>
 
-#include <Guid/DataHubRecords.h>
-
 #include <Protocol/IgdOpRegion.h>
-#include <Protocol/FrameworkHii.h>
 #include <Protocol/FirmwareVolume2.h>
 #include <Protocol/PlatformGopPolicy.h>
 #include <Protocol/PciIo.h>
-#include <Protocol/CpuIo.h>
+#include <Protocol/CpuIo2.h>
 #include <Protocol/GlobalNvsArea.h>
 #include <Protocol/DxeSmmReadyToLock.h>
 #include <Protocol/PciRootBridgeIo.h>
@@ -71,7 +64,6 @@ extern DXE_VLV_PLATFORM_POLICY_PROTOCOL  *DxePlatformSaPolicy;
 //
 
 IGD_OPREGION_PROTOCOL mIgdOpRegion;
-EFI_GUID              mMiscSubClass = EFI_MISC_SUBCLASS_GUID;
 EFI_EVENT             mConOutEvent;
 EFI_EVENT             mSetGOPverEvent;
 VOID                  *mConOutReg;
@@ -636,7 +628,7 @@ IgdOpRegionInit (
   EFI_STATUS                    Status;
   EFI_GLOBAL_NVS_AREA_PROTOCOL  *GlobalNvsArea;
   UINT32                        DwordData;
-  EFI_CPU_IO_PROTOCOL           *CpuIo;
+  EFI_CPU_IO2_PROTOCOL          *CpuIo;
   UINT16                        Data16;
   UINT16                        AcpiBase;
   VOID                          *gConOutNotifyReg;
@@ -884,7 +876,7 @@ IgdOpRegionInit (
   // Find the CPU I/O Protocol.  ASSERT if not found.
   //
   Status = gBS->LocateProtocol (
-                  &gEfiCpuIoProtocolGuid,
+                  &gEfiCpuIo2ProtocolGuid,
                   NULL,
                   (void **)&CpuIo
                   );

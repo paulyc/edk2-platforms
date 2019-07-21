@@ -11,7 +11,6 @@ echo.
 echo %date%  %time%
 echo.
 
-
 ::**********************************************************************
 :: Initial Setup
 ::**********************************************************************
@@ -20,9 +19,14 @@ set /a build_threads=1
 set "Build_Flags= "
 set exitCode=0
 set Arch=X64
-set Source=0
+set GenLog=FALSE
+set GenReport=FALSE
+set Clean=FALSE
 set PLATFORM_NAME=Vlv2TbltDevicePkg
 
+::**********************************************************************
+:: Detect full path to the edk2 repo
+::**********************************************************************
 set CORE_PATH=%WORKSPACE%
 if not exist %CORE_PATH%\edksetup.bat (
   if defined PACKAGES_PATH (
@@ -41,6 +45,9 @@ if not exist %CORE_PATH%\edksetup.bat (
 )
 :CorePathFound
 
+::**********************************************************************
+:: Detect full path to the Vlv2TbltDevicePkg
+::**********************************************************************
 set PLATFORM_PACKAGE=%WORKSPACE%\%PLATFORM_NAME%
 if not exist %PLATFORM_PACKAGE% (
   if defined PACKAGES_PATH (
@@ -61,27 +68,12 @@ if not exist %PLATFORM_PACKAGE% (
 
 cd %CORE_PATH%
 
-:: Clean up previous build files.
-if exist %WORKSPACE%\edk2.log del %WORKSPACE%\edk2.log
-if exist %WORKSPACE%\unitool.log del %WORKSPACE%\unitool.log
-if exist %WORKSPACE%\Conf\target.txt del %WORKSPACE%\Conf\target.txt
-if exist %WORKSPACE%\Conf\tools_def.txt del %WORKSPACE%\Conf\tools_def.txt
-if exist %WORKSPACE%\Conf\build_rule.txt del %WORKSPACE%\Conf\build_rule.txt
-if exist %WORKSPACE%\Conf\.cache rmdir /q/s %WORKSPACE%\Conf\.cache
+::**********************************************************************
+:: Run edksetup.bat and make sure tools are up to date
+::**********************************************************************
 
-:: Setup EDK environment. Edksetup puts new copies of target.txt, tools_def.txt, build_rule.txt in WorkSpace\Conf
-:: Also run edksetup as soon as possible to avoid it from changing environment variables we're overriding
 call %CORE_PATH%\edksetup.bat Rebuild
 @echo off
-
-:: Define platform specific environment variables.
-set config_file=%PLATFORM_PACKAGE%\PlatformPkgConfig.dsc
-set auto_config_inc=%PLATFORM_PACKAGE%\AutoPlatformCFG.txt
-
-
-
-::create new AutoPlatformCFG.txt file
-copy /y nul %auto_config_inc% >nul
 
 ::**********************************************************************
 :: Parse command line arguments
@@ -92,12 +84,12 @@ copy /y nul %auto_config_inc% >nul
 if /i "%~1"=="/?" goto Usage
 
 if /i "%~1"=="/l" (
-    set Build_Flags=%Build_Flags% -j EDK2.log
+    set GenLog=TRUE
     shift
     goto OptLoop
 )
 if /i "%~1"=="/y" (
-    set Build_Flags=%Build_Flags% -y %PLATFORM_PACKAGE%\EDK2_%PLATFORM_PACKAGE%.report
+    set GenReport=TRUE
     shift
     goto OptLoop
 )
@@ -109,16 +101,7 @@ if /i "%~1"=="/m" (
     goto OptLoop
 )
 if /i "%~1" == "/c" (
-    echo Removing previous build files ...
-    if exist build (
-        del /f/s/q build > nul
-        rmdir /s/q build
-    )
-    if exist %WORKSPACE%\Conf\.cache (
-        del /f/s/q %WORKSPACE%\Conf\.cache > nul
-        rmdir /s/q %WORKSPACE%\Conf\.cache
-    )
-    echo.
+    set Clean=TRUE
     shift
     goto OptLoop
 )
@@ -137,38 +120,16 @@ if /i "%~1"=="/IA32" (
 :: Required argument(s)
 if "%~1"=="" goto Usage
 
-::Remove the values for Platform_Type and Build_Target from BiosIdX.env and stage in Conf\
-if "%Arch%"=="IA32" (
-    findstr /b /v "BOARD_ID  BUILD_TYPE" %PLATFORM_PACKAGE%\BiosIdR.env > %WORKSPACE%\Conf\BiosId.env
-    echo DEFINE X64_CONFIG = FALSE  >> %auto_config_inc%
-) else if "%Arch%"=="X64" (
-    findstr /b /v "BOARD_ID  BUILD_TYPE" %PLATFORM_PACKAGE%\BiosIdx64R.env > %WORKSPACE%\Conf\BiosId.env
-    echo DEFINE X64_CONFIG = TRUE  >> %auto_config_inc%
-)
-
-:: -- Build flags settings for each Platform --
-echo Setting  %1  platform configuration and BIOS ID...
-if /i "%~1" == "MNW2" (
-    echo BOARD_ID = MNW2MAX >> %WORKSPACE%\Conf\BiosId.env
-    echo DEFINE ENBDT_PF_BUILD = TRUE   >> %auto_config_inc%
-    
-) else (
-    echo Error - Unsupported PlatformType: %1
-    goto Usage
-)
-set Platform_Type=%~1
-
 if /i "%~2" == "RELEASE" (
     set target=RELEASE
-    echo BUILD_TYPE = R >> %WORKSPACE%\Conf\BiosId.env
 ) else (
     set target=DEBUG
-    echo BUILD_TYPE = D >> %WORKSPACE%\Conf\BiosId.env
 )
 
 ::**********************************************************************
-:: Additional EDK Build Setup/Configuration
+:: Detect TOOL_CHAIN_TAG
 ::**********************************************************************
+
 echo.
 echo Setting the Build environment for VS2015/VS2013/VS2012/VS2010/VS2008...
 if defined VS140COMNTOOLS (
@@ -212,46 +173,88 @@ if defined VS140COMNTOOLS (
   goto :BldFail
 )
 
-echo Ensuring correct build directory is present for GenBiosId...
-set BUILD_PATH=%WORKSPACE%\Build\%PLATFORM_NAME%\%TARGET%_%TOOL_CHAIN_TAG%
+::**********************************************************************
+:: Generate BUILD_PATH and make sure the directory exists
+::**********************************************************************
 
-echo Modifing Conf files for this build...
-:: Remove lines with these tags from target.txt
-findstr /V "TARGET  TARGET_ARCH  TOOL_CHAIN_TAG  BUILD_RULE_CONF  ACTIVE_PLATFORM  MAX_CONCURRENT_THREAD_NUMBER" %WORKSPACE%\Conf\target.txt > %WORKSPACE%\Conf\target.txt.tmp
-
-echo TARGET          = %TARGET%                                  >> %WORKSPACE%\Conf\target.txt.tmp
+echo Ensuring correct build directory is present
+if not exist %WORKSPACE%\Build mkdir %WORKSPACE%\Build
 if "%Arch%"=="IA32" (
-    echo TARGET_ARCH = IA32                                       >> %WORKSPACE%\Conf\target.txt.tmp
-) else if "%Arch%"=="X64" (
-    echo TARGET_ARCH = IA32 X64                                  >> %WORKSPACE%\Conf\target.txt.tmp
-)
-echo TOOL_CHAIN_TAG  = %TOOL_CHAIN_TAG%                                  >> %WORKSPACE%\Conf\target.txt.tmp
-echo BUILD_RULE_CONF = Conf/build_rule.txt                               >> %WORKSPACE%\Conf\target.txt.tmp
-if %Source% == 0 (
-  echo ACTIVE_PLATFORM = %PLATFORM_PACKAGE%/PlatformPkg%Arch%.dsc        >> %WORKSPACE%\Conf\target.txt.tmp
+  if not exist %WORKSPACE%\Build\%PLATFORM_NAME%IA32 mkdir %WORKSPACE%\Build\%PLATFORM_NAME%IA32
+  set BUILD_PATH=%WORKSPACE%\Build\%PLATFORM_NAME%IA32\%TARGET%_%TOOL_CHAIN_TAG%
 ) else (
-  echo ACTIVE_PLATFORM = %PLATFORM_PACKAGE%/PlatformPkg%Arch%Source.dsc  >> %WORKSPACE%\Conf\target.txt.tmp
+  if not exist %WORKSPACE%\Build\%PLATFORM_NAME% mkdir %WORKSPACE%\Build\%PLATFORM_NAME%
+  set BUILD_PATH=%WORKSPACE%\Build\%PLATFORM_NAME%\%TARGET%_%TOOL_CHAIN_TAG%
 )
-echo MAX_CONCURRENT_THREAD_NUMBER = %build_threads%                      >> %WORKSPACE%\Conf\target.txt.tmp
+if not exist %BUILD_PATH% mkdir %BUILD_PATH%
 
-move /Y %WORKSPACE%\Conf\target.txt.tmp %WORKSPACE%\Conf\target.txt >nul
+::**********************************************************************
+:: Check for clean operation
+::**********************************************************************
+
+if "%Clean%"=="TRUE" (
+  echo Removing previous build files ...
+  if exist %BUILD_PATH% (
+    rmdir /s/q %BUILD_PATH%
+  )
+  if exist %WORKSPACE%\Conf\.cache (
+    rmdir /s/q %WORKSPACE%\Conf\.cache
+  )
+  echo.
+  goto :Exit
+)
+
+::**********************************************************************
+:: Generate Build_Flags
+::**********************************************************************
+
+set Build_Flags=%Build_Flags% -b %TARGET%
+if "%Arch%"=="IA32" (
+    set Build_Flags=%Build_Flags% -a IA32
+) else if "%Arch%"=="X64" (
+    set Build_Flags=%Build_Flags% -a IA32 -a X64
+)
+set Build_Flags=%Build_Flags% -t %TOOL_CHAIN_TAG%
+set Build_Flags=%Build_Flags% -p %PLATFORM_PACKAGE%/PlatformPkg%Arch%.dsc
+set Build_Flags=%Build_Flags% -n %build_threads%
+if "%GenLog%"=="TRUE" (
+  set Build_Flags=%Build_Flags% -j %BUILD_PATH%\%PLATFORM_NAME%.log
+)
+if "%GenReport%"=="TRUE" (
+  set Build_Flags=%Build_Flags% -y %BUILD_PATH%\%PLATFORM_NAME%.report
+)
+
+::**********************************************************************
+:: Generate BIOS ID
+::**********************************************************************
+
+echo BOARD_ID       = MNW2MAX >  %BUILD_PATH%/BiosId.env
+echo BOARD_REV      = 1       >> %BUILD_PATH%/BiosId.env
+if "%Arch%"=="IA32" (
+  echo BOARD_EXT      = I32   >> %BUILD_PATH%/BiosId.env
+)
+if "%Arch%"=="X64" (
+  echo BOARD_EXT      = X64   >> %BUILD_PATH%/BiosId.env
+)
+echo VERSION_MAJOR  = 0090    >> %BUILD_PATH%/BiosId.env
+if "%TARGET%"=="DEBUG" (
+  echo BUILD_TYPE     = D     >> %BUILD_PATH%/BiosId.env
+)
+if "%TARGET%"=="RELEASE" (
+  echo BUILD_TYPE     = R     >> %BUILD_PATH%/BiosId.env
+)
+echo VERSION_MINOR  = 01      >> %BUILD_PATH%/BiosId.env
+
+%WORKSPACE%\edk2-platforms\Platform\Intel\Tools\GenBiosId\GenBiosId.py -i %BUILD_PATH%/BiosId.env -o %BUILD_PATH%/BiosId.bin -ot %BUILD_PATH%/BiosId.txt
 
 ::**********************************************************************
 :: Build BIOS
 ::**********************************************************************
 
-echo Creating BiosId...
-if not exist %BUILD_PATH%\IA32  mkdir %BUILD_PATH%\IA32
-%PLATFORM_PACKAGE%\GenBiosId.exe -i %WORKSPACE%\Conf\BiosId.env -o %BUILD_PATH%\IA32\BiosId.bin -ob %WORKSPACE%\Conf\BiosId.bat
-if "%Arch%"=="X64" (
-   if not exist %BUILD_PATH%\X64  mkdir %BUILD_PATH%\X64
-   %PLATFORM_PACKAGE%\GenBiosId.exe -i %WORKSPACE%\Conf\BiosId.env -o %BUILD_PATH%\X64\BiosId.bin -ob %WORKSPACE%\Conf\BiosId.bat
-)
-
-if %ERRORLEVEL% NEQ 0 goto BldFail
-
 echo.
 echo Invoking EDK2 build...
+echo build %Build_Flags%
+
 call build %Build_Flags%
 
 if %ERRORLEVEL% NEQ 0 goto BldFail
@@ -267,31 +270,18 @@ pushd %PLATFORM_PACKAGE%
 %PLATFORM_PACKAGE%\fce read -i %BUILD_PATH%\FV\Vlv.fd > %BUILD_PATH%\FV\HiiDefaultData.txt
 
 :: save changes to VlvXXX.fd
-%PLATFORM_PACKAGE%\fce update -i %BUILD_PATH%\FV\Vlv.fd -s %BUILD_PATH%\FV\HiiDefaultData.txt -o %BUILD_PATH%\FV\Vlv%Arch%.fd
+%PLATFORM_PACKAGE%\fce update -i %BUILD_PATH%\FV\Vlv.fd -s %BUILD_PATH%\FV\HiiDefaultData.txt -o %BUILD_PATH%\FV\Vlv.ROM
 popd
 
 if %ERRORLEVEL% NEQ 0 goto BldFail
 ::echo FD successfully updated with default Hii values.
 
-:: Set the Board_Id, Build_Type, Version_Major, and Version_Minor environment variables
-find /v "#" %WORKSPACE%\Conf\BiosId.env > ver_strings
-for /f "tokens=1,3" %%i in (ver_strings) do set %%i=%%j
-del /f/q ver_strings >nul
-
-set BIOS_Name=%BOARD_ID%_%Arch%_%BUILD_TYPE%_%VERSION_MAJOR%_%VERSION_MINOR%.ROM
-copy /y/b %BUILD_PATH%\FV\Vlv%Arch%.fd  %PLATFORM_PACKAGE%\Stitch\%BIOS_Name% >nul
-copy /y/b %BUILD_PATH%\FV\Vlv%Arch%.fd  %BUILD_PATH%\FV\Vlv.ROM >nul
-
-echo.
-echo Build location:     %BUILD_PATH%
-echo BIOS ROM Created:   %BIOS_Name%
-echo.
-echo -------------------- The EDKII BIOS build has successfully completed. --------------------
-echo.
-
 @REM build capsule here
-echo > %BUILD_PATH%\FV\SYSTEMFIRMWAREUPDATECARGO.Fv
-build -p %PLATFORM_PACKAGE%\PlatformCapsule.dsc
+if "%Arch%"=="X64" (
+  echo Invoking EDK2 build for capsules...
+  echo build -t %TOOL_CHAIN_TAG% -p %PLATFORM_PACKAGE%\PlatformCapsule.dsc
+  call build -t %TOOL_CHAIN_TAG% -p %PLATFORM_PACKAGE%\PlatformCapsule.dsc
+)
 
 goto Exit
 
@@ -302,7 +292,7 @@ echo Build BIOS rom for VLV platforms.
 echo.
 echo Usage: bld_vlv.bat [options] PlatformType [Build Target]
 echo.
-echo    /c    CleanAll before building
+echo    /c    CleanAll
 echo    /l    Generate build log file
 echo    /y    Generate build report file
 echo    /m    Enable multi-processor build

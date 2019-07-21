@@ -1,11 +1,8 @@
 /** @file
 
-  Copyright (c) 2004  - 2014, Intel Corporation. All rights reserved.<BR>
-                                                                                   
+  Copyright (c) 2004  - 2019, Intel Corporation. All rights reserved.<BR>
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
-
-                                                                                   
-
 
 Module Name:
 
@@ -815,23 +812,6 @@ PeiInitPlatform (
     &PlatformInfo,
     sizeof (EFI_PLATFORM_INFO_HOB)
     );
-
-
-#ifdef FTPM_ENABLE
-  Status = FtpmPolicyInit(PeiServices, &SystemConfiguration);
-  if (EFI_ERROR (Status)) {
-    DEBUG((EFI_D_ERROR, "fTPM init failed.\n"));
-  }
-#endif
-
-
-  //
-  // Set the new boot mode for MRC
-  //
-#ifdef NOCS_S3_SUPPORT
-  Status = UpdateBootMode (PeiServices);
-  ASSERT_EFI_ERROR (Status);
-#endif
 
   DEBUG((EFI_D_INFO, "Setup MMIO size ... \n\n"));
 

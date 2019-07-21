@@ -1,11 +1,8 @@
 #
 #
-# Copyright (c)  1999  - 2014, Intel Corporation. All rights reserved
-#                                                                                  
+# Copyright (c)  1999  - 2019, Intel Corporation. All rights reserved
+#
 # SPDX-License-Identifier: BSD-2-Clause-Patent
-#                                                                                  
-#
-#
 #
 #  Module Name:
 #
@@ -57,18 +54,16 @@
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
   Vlv2TbltDevicePkg/PlatformPkg.dec
-  IntelFrameworkPkg/IntelFrameworkPkg.dec
   Vlv2DeviceRefCodePkg/Vlv2DeviceRefCodePkg.dec
-  Vlv2SocBinPkg/Vlv2SocBinPkg.dec
 
 [LibraryClasses]
   DebugLib
   HobLib
   IoLib
-#  PeiKscLib
 
 [Ppis]
   gEfiPeiReadOnlyVariable2PpiGuid
+  gEfiPeiSmbus2PpiGuid
 
 [Pcd.common]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress

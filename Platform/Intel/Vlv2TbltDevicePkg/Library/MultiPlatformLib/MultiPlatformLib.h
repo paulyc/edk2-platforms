@@ -3,11 +3,11 @@
 
   This file includes package header files, library classes.
 
-  Copyright (c) 2013 - 2014, Intel Corporation. All rights reserved.<BR>
-                                                                                   
+  Copyright (c) 2013 - 2019, Intel Corporation. All rights reserved.<BR>
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
-                                                                                   
+
 **/
 
 #ifndef _MULTIPLATFORM_LIB_H_
@@ -26,7 +26,6 @@
 
 #include <PiDxe.h>
 #include <Library/BaseLib.h>
-#include <FrameworkPei.h>
 
 #include "PlatformBaseAddresses.h"
 #include "PchAccess.h"
@@ -37,7 +36,6 @@
 #include <Ppi/Stall.h>
 #include <Guid/SetupVariable.h>
 #include <Ppi/AtaController.h>
-#include <Ppi/FindFv.h>
 #include <Ppi/BootInRecoveryMode.h>
 #include <Ppi/ReadOnlyVariable2.h>
 #include <Ppi/Capsule.h>
@@ -50,16 +48,13 @@
 #include <Library/BaseLib.h>
 #include <IndustryStandard/Pci22.h>
 #include <Ppi/Speaker.h>
-#include <Guid/FirmwareFileSystem.h>
 #include <Guid/MemoryTypeInformation.h>
-#include <Ppi/Cache.h>
 #include <Ppi/Reset.h>
 #include <Ppi/EndOfPeiPhase.h>
 #include <Ppi/MemoryDiscovered.h>
 #include <Guid/GlobalVariable.h>
 #include <Ppi/RecoveryModule.h>
 #include <Ppi/DeviceRecoveryModule.h>
-#include <Guid/Capsule.h>
 #include <Guid/RecoveryDevice.h>
 #include <Ppi/MasterBootMode.h>
 #include <Guid/PlatformInfo.h>

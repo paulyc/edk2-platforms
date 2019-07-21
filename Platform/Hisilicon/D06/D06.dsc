@@ -51,11 +51,6 @@
   BootLogoLib|MdeModulePkg/Library/BootLogoLib/BootLogoLib.inf
   SortLib|MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
 
-
-!if $(NETWORK_HTTP_BOOT_ENABLE) == TRUE
-  HttpLib|MdeModulePkg/Library/DxeHttpLib/DxeHttpLib.inf
-!endif
-
   CpldIoLib|Silicon/Hisilicon/Library/CpldIoLib/CpldIoLib.inf
 
   TimeBaseLib|EmbeddedPkg/Library/TimeBaseLib/TimeBaseLib.inf
@@ -65,7 +60,6 @@
   PlatformSysCtrlLib|Silicon/Hisilicon/Hi1620/Library/PlatformSysCtrlLibHi1620/PlatformSysCtrlLibHi1620.inf
 
   CapsuleLib|MdeModulePkg/Library/DxeCapsuleLibNull/DxeCapsuleLibNull.inf
-  GenericBdsLib|IntelFrameworkModulePkg/Library/GenericBdsLib/GenericBdsLib.inf
   BmcConfigBootLib|Silicon/Hisilicon/Library/BmcConfigBootLib/BmcConfigBootLib.inf
   UefiBootManagerLib|MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
   SortLib|MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
@@ -183,7 +177,6 @@
 
 
   gEfiMdeModulePkgTokenSpaceGuid.PcdResetOnMemoryTypeInformationChange|FALSE
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdShellFile|{ 0x83, 0xA5, 0x04, 0x7C, 0x3E, 0x9E, 0x1C, 0x4F, 0xAD, 0x65, 0xE0, 0x52, 0x68, 0xD0, 0xB4, 0xD1 }
   gEfiMdeModulePkgTokenSpaceGuid.PcdBootManagerMenuFile|{ 0x21, 0xaa, 0x2c, 0x46, 0x14, 0x76, 0x03, 0x45, 0x83, 0x6e, 0x8a, 0xb6, 0xf4, 0x66, 0x23, 0x31 }
   gHisiTokenSpaceGuid.PcdSysControlBaseAddress|0x94010000
   gHisiTokenSpaceGuid.PcdMailBoxAddress|0x0000FFF8
@@ -251,7 +244,8 @@
   ArmPlatformPkg/PlatformPei/PlatformPeim.inf
 
   ArmPkg/Drivers/CpuPei/CpuPei.inf
-  IntelFrameworkModulePkg/Universal/StatusCode/Pei/StatusCodePei.inf
+  MdeModulePkg/Universal/ReportStatusCodeRouter/Pei/ReportStatusCodeRouterPei.inf
+  MdeModulePkg/Universal/StatusCodeHandler/Pei/StatusCodeHandlerPei.inf
   MdeModulePkg/Universal/FaultTolerantWritePei/FaultTolerantWritePei.inf
   MdeModulePkg/Universal/Variable/Pei/VariablePei.inf
 
@@ -313,7 +307,8 @@
   ArmPkg/Drivers/TimerDxe/TimerDxe.inf
 
   MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
-  IntelFrameworkModulePkg/Universal/StatusCode/RuntimeDxe/StatusCodeRuntimeDxe.inf
+  MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
+  MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
   #
   #ACPI
   #

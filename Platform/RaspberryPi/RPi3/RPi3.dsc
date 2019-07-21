@@ -26,6 +26,12 @@
   FLASH_DEFINITION               = Platform/RaspberryPi/$(PLATFORM_NAME)/$(PLATFORM_NAME).fdf
 
   #
+  # Network definition
+  #
+  DEFINE NETWORK_TLS_ENABLE       = FALSE
+  DEFINE NETWORK_HTTP_BOOT_ENABLE = FALSE
+
+  #
   # Defines for default states.  These can be changed on the command line.
   # -D FLAG=VALUE
   #
@@ -50,6 +56,7 @@
   BmpSupportLib|MdeModulePkg/Library/BaseBmpSupportLib/BaseBmpSupportLib.inf
   SynchronizationLib|MdePkg/Library/BaseSynchronizationLib/BaseSynchronizationLib.inf
   PerformanceLib|MdePkg/Library/BasePerformanceLibNull/BasePerformanceLibNull.inf
+  ReportStatusCodeLib|MdePkg/Library/BaseReportStatusCodeLibNull/BaseReportStatusCodeLibNull.inf
   PrintLib|MdePkg/Library/BasePrintLib/BasePrintLib.inf
   PeCoffGetEntryPointLib|MdePkg/Library/BasePeCoffGetEntryPointLib/BasePeCoffGetEntryPointLib.inf
   PeCoffLib|MdePkg/Library/BasePeCoffLib/BasePeCoffLib.inf
@@ -85,12 +92,6 @@
   # use the accelerated BaseMemoryLibOptDxe by default, overrides for SEC/PEI below
   BaseMemoryLib|MdePkg/Library/BaseMemoryLibOptDxe/BaseMemoryLibOptDxe.inf
 
-  # Networking Requirements
-  NetLib|MdeModulePkg/Library/DxeNetLib/DxeNetLib.inf
-  DpcLib|MdeModulePkg/Library/DxeDpcLib/DxeDpcLib.inf
-  UdpIoLib|MdeModulePkg/Library/DxeUdpIoLib/DxeUdpIoLib.inf
-  IpIoLib|MdeModulePkg/Library/DxeIpIoLib/DxeIpIoLib.inf
-
   #
   # It is not possible to prevent the ARM compiler from inserting calls to intrinsic functions.
   # This library provides the instrinsic functions such a compiler may generate calls to.
@@ -117,6 +118,11 @@
   PlatformHookLib|MdeModulePkg/Library/BasePlatformHookLibNull/BasePlatformHookLibNull.inf
   SerialPortLib|MdeModulePkg/Library/BaseSerialPortLib16550/BaseSerialPortLib16550.inf
 
+  # Cryptographic libraries
+  IntrinsicLib|CryptoPkg/Library/IntrinsicLib/IntrinsicLib.inf
+  BaseCryptLib|CryptoPkg/Library/BaseCryptLib/BaseCryptLib.inf
+  OpensslLib|CryptoPkg/Library/OpensslLib/OpensslLib.inf
+
   #
   # Uncomment (and comment out the next line) For RealView Debugger. The Standard IO window
   # in the debugger will show load and unload commands for symbols. You can cut and paste this
@@ -140,11 +146,8 @@
   # Secure Boot dependencies
   #
 !if $(SECURE_BOOT_ENABLE) == TRUE
-  IntrinsicLib|CryptoPkg/Library/IntrinsicLib/IntrinsicLib.inf
-  OpensslLib|CryptoPkg/Library/OpensslLib/OpensslLib.inf
   TpmMeasurementLib|SecurityPkg/Library/DxeTpmMeasurementLib/DxeTpmMeasurementLib.inf
   AuthVariableLib|SecurityPkg/Library/AuthVariableLib/AuthVariableLib.inf
-  BaseCryptLib|CryptoPkg/Library/BaseCryptLib/BaseCryptLib.inf
 
   # re-use the UserPhysicalPresent() dummy implementation from the ovmf tree
   PlatformSecureLib|OvmfPkg/Library/PlatformSecureLib/PlatformSecureLib.inf
@@ -171,12 +174,10 @@
   HobLib|MdePkg/Library/DxeCoreHobLib/DxeCoreHobLib.inf
   MemoryAllocationLib|MdeModulePkg/Library/DxeCoreMemoryAllocationLib/DxeCoreMemoryAllocationLib.inf
   DxeCoreEntryPoint|MdePkg/Library/DxeCoreEntryPoint/DxeCoreEntryPoint.inf
-  ReportStatusCodeLib|IntelFrameworkModulePkg/Library/DxeReportStatusCodeLibFramework/DxeReportStatusCodeLib.inf
   ExtractGuidedSectionLib|MdePkg/Library/DxeExtractGuidedSectionLib/DxeExtractGuidedSectionLib.inf
   PerformanceLib|MdeModulePkg/Library/DxeCorePerformanceLib/DxeCorePerformanceLib.inf
 
 [LibraryClasses.common.DXE_DRIVER]
-  ReportStatusCodeLib|IntelFrameworkModulePkg/Library/DxeReportStatusCodeLibFramework/DxeReportStatusCodeLib.inf
   SecurityManagementLib|MdeModulePkg/Library/DxeSecurityManagementLib/DxeSecurityManagementLib.inf
   PerformanceLib|MdeModulePkg/Library/DxePerformanceLib/DxePerformanceLib.inf
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
@@ -187,17 +188,14 @@
   HiiLib|MdeModulePkg/Library/UefiHiiLib/UefiHiiLib.inf
   ShellLib|ShellPkg/Library/UefiShellLib/UefiShellLib.inf
   FileHandleLib|MdePkg/Library/UefiFileHandleLib/UefiFileHandleLib.inf
-  ReportStatusCodeLib|MdeModulePkg/Library/DxeReportStatusCodeLib/DxeReportStatusCodeLib.inf
 
 [LibraryClasses.common.UEFI_DRIVER]
-  ReportStatusCodeLib|IntelFrameworkModulePkg/Library/DxeReportStatusCodeLibFramework/DxeReportStatusCodeLib.inf
   ExtractGuidedSectionLib|MdePkg/Library/DxeExtractGuidedSectionLib/DxeExtractGuidedSectionLib.inf
   PerformanceLib|MdeModulePkg/Library/DxePerformanceLib/DxePerformanceLib.inf
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
 
 [LibraryClasses.common.DXE_RUNTIME_DRIVER]
   MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
-  ReportStatusCodeLib|IntelFrameworkModulePkg/Library/DxeReportStatusCodeLibFramework/DxeReportStatusCodeLib.inf
   CapsuleLib|MdeModulePkg/Library/DxeCapsuleLibNull/DxeCapsuleLibNull.inf
   EfiResetSystemLib|Platform/RaspberryPi/$(PLATFORM_NAME)/Library/ResetLib/ResetLib.inf
   ArmSmcLib|ArmPkg/Library/ArmSmcLib/ArmSmcLib.inf
@@ -384,7 +382,6 @@
 
   gEfiMdeModulePkgTokenSpaceGuid.PcdResetOnMemoryTypeInformationChange|FALSE
   gEfiMdeModulePkgTokenSpaceGuid.PcdBootManagerMenuFile|{ 0x21, 0xaa, 0x2c, 0x46, 0x14, 0x76, 0x03, 0x45, 0x83, 0x6e, 0x8a, 0xb6, 0xf4, 0x66, 0x23, 0x31 }
-  gEfiIntelFrameworkModulePkgTokenSpaceGuid.PcdShellFile|{ 0x83, 0xA5, 0x04, 0x7C, 0x3E, 0x9E, 0x1C, 0x4F, 0xAD, 0x65, 0xE0, 0x52, 0x68, 0xD0, 0xB4, 0xD1 }
 
   gEfiMdeModulePkgTokenSpaceGuid.PcdFirmwareVendor|L"Raspberry Pi 3 64-bit UEFI"
   gEfiMdeModulePkgTokenSpaceGuid.PcdSetNxForStack|TRUE
@@ -396,6 +393,7 @@
   #
 
   gRaspberryPiTokenSpaceGuid.PcdCpuClock|L"CpuClock"|gConfigDxeFormSetGuid|0x0|0
+  gRaspberryPiTokenSpaceGuid.PcdCustomCpuClock|L"CustomCpuClock"|gConfigDxeFormSetGuid|0x0|600
 
   #
   # SD-related.
@@ -542,6 +540,11 @@
   MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
 
   #
+  # RAM Disk Support
+  #
+  MdeModulePkg/Universal/Disk/RamDiskDxe/RamDiskDxe.inf
+
+  #
   # Bds
   #
   MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
@@ -571,7 +574,7 @@
   MdeModulePkg/Bus/Usb/UsbBusDxe/UsbBusDxe.inf
   MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
   MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
-  OptionRomPkg/Bus/Usb/UsbNetworking/Ax88772b/Ax88772b.inf
+  Drivers/OptionRomPkg/Bus/Usb/UsbNetworking/Ax88772b/Ax88772b.inf
 
   #
   # SD/MMC support
@@ -583,16 +586,7 @@
   #
   # Networking stack
   #
-  MdeModulePkg/Universal/Network/DpcDxe/DpcDxe.inf
-  MdeModulePkg/Universal/Network/ArpDxe/ArpDxe.inf
-  MdeModulePkg/Universal/Network/Dhcp4Dxe/Dhcp4Dxe.inf
-  MdeModulePkg/Universal/Network/Ip4Dxe/Ip4Dxe.inf
-  MdeModulePkg/Universal/Network/MnpDxe/MnpDxe.inf
-  MdeModulePkg/Universal/Network/VlanConfigDxe/VlanConfigDxe.inf
-  MdeModulePkg/Universal/Network/Mtftp4Dxe/Mtftp4Dxe.inf
-  MdeModulePkg/Universal/Network/Udp4Dxe/Udp4Dxe.inf
-  NetworkPkg/UefiPxeBcDxe/UefiPxeBcDxe.inf
-  NetworkPkg/TcpDxe/TcpDxe.inf
+!include NetworkPkg/Network.dsc.inc
 
   #
   # RNG

@@ -1,7 +1,7 @@
 ## @file
 #  FDF file of Platform.
 #
-# Copyright (c) 2017 - 2018, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2017 - 2019, Intel Corporation. All rights reserved.<BR>
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -203,9 +203,7 @@ READ_STATUS        = FALSE
 READ_LOCK_CAP      = TRUE
 READ_LOCK_STATUS   = TRUE
 
-FILE RAW = 197DB236-F856-4924-90F8-CDF12FB875F3 {
-  $(OUTPUT_DIRECTORY)/$(TARGET)_$(TOOL_CHAIN_TAG)/X64/MicrocodeUpdates.bin
-}
+INF RuleOverride = MICROCODE $(PLATFORM_SI_BIN_PACKAGE)/Microcode/MicrocodeUpdates.inf
 
 [FV.FvPreMemory]
 BlockSize          = $(FLASH_BLOCK_SIZE)
@@ -228,7 +226,13 @@ READ_LOCK_STATUS   = TRUE
 FvNameGuid         = FC8FE6B5-CD9B-411E-BD8F-31824D0CDE3D
 
 INF  UefiCpuPkg/SecCore/SecCore.inf
+!if (gMinPlatformPkgTokenSpaceGuid.PcdFspWrapperBootMode == FALSE) || (gIntelFsp2WrapperTokenSpaceGuid.PcdFspModeSelection == 1)
+#
+# PeiMain is needed only for FSP API mode or EDK2 build,
+# in FSP dispatch mode the one inside FSP Binary is launched.
+#
 INF  MdeModulePkg/Core/Pei/PeiMain.inf
+!endif
 !include $(PLATFORM_PACKAGE)/Include/Fdf/CorePreMemoryInclude.fdf
 
 INF $(PLATFORM_PACKAGE)/PlatformInit/ReportFv/ReportFvPei.inf
@@ -332,7 +336,12 @@ INF  MdeModulePkg/Universal/Console/GraphicsOutputDxe/GraphicsOutputDxe.inf
 INF  ShellPkg/Application/Shell/Shell.inf
 
 INF  $(PLATFORM_PACKAGE)/PlatformInit/PlatformInitDxe/PlatformInitDxe.inf
-INF  IntelFsp2WrapperPkg/FspWrapperNotifyDxe/FspWrapperNotifyDxe.inf
+!if gIntelFsp2WrapperTokenSpaceGuid.PcdFspModeSelection == 1
+  #
+  # Below module is used by FSP API mode
+  #
+  INF  IntelFsp2WrapperPkg/FspWrapperNotifyDxe/FspWrapperNotifyDxe.inf
+!endif
 
 INF  $(PLATFORM_PACKAGE)/Test/TestPointStubDxe/TestPointStubDxe.inf
 

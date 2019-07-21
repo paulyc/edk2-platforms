@@ -3,11 +3,8 @@
 #
 # FIX ME!
 # Copyright (c) 2006 - 2019, Intel Corporation. All rights reserved.<BR>
-#                                                                                  
+#
 # SPDX-License-Identifier: BSD-2-Clause-Patent
-#                                                                                  
-#
-#
 #
 ##
 
@@ -84,12 +81,13 @@
   MiscMemoryDeviceFunction.c
 
 [Packages]
-  MdeModulePkg/MdeModulePkg.dec
-  Vlv2TbltDevicePkg/PlatformPkg.dec
   MdePkg/MdePkg.dec
-  IntelFrameworkPkg/IntelFrameworkPkg.dec
-  Vlv2DeviceRefCodePkg/Vlv2DeviceRefCodePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
   NetworkPkg/NetworkPkg.dec
+  UefiCpuPkg/UefiCpuPkg.dec
+  BoardModulePkg/BoardModulePkg.dec
+  Vlv2TbltDevicePkg/PlatformPkg.dec
+  Vlv2DeviceRefCodePkg/Vlv2DeviceRefCodePkg.dec
 
 [LibraryClasses]
   HiiLib
@@ -105,15 +103,12 @@
   UefiLib
   BiosIdLib
   PrintLib
-  CpuIA32Lib
   PchPlatformLib
-  I2cLib
   NetLib
   HobLib
+  TimerLib
   
 [Guids]
-  gEfiProcessorSubClassGuid
-  gEfiCacheSubClassGuid
   gEfiNormalSetupGuid
   gEfiPlatformInfoGuid
   gEfiVlv2VariableGuid
@@ -121,12 +116,10 @@
 [Protocols]
   gEfiSmbiosProtocolGuid                        # PROTOCOL ALWAYS_CONSUMED
   gEfiDxeSmmReadyToLockProtocolGuid             # PROTOCOL ALWAYS_CONSUMED
-  gEfiDataHubProtocolGuid
   gEfiMpServiceProtocolGuid
   gMemInfoProtocolGuid
   gEfiTdtOperationProtocolGuid
   gDxePchPlatformPolicyProtocolGuid
-  gEfiSpiProtocolGuid
   gEfiSimpleNetworkProtocolGuid
 
 [Pcd]
@@ -137,4 +130,4 @@
   gEfiVLVTokenSpaceGuid.PcdProductSerialNumber
 
 [Depex]
- gEfiSmbiosProtocolGuid AND gMemInfoProtocolGuid AND gEfiMpServiceProtocolGuid AND gEfiSimpleNetworkProtocolGuid
+  gEfiSmbiosProtocolGuid AND gMemInfoProtocolGuid AND gEfiMpServiceProtocolGuid

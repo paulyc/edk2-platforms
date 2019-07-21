@@ -7,74 +7,60 @@ function Usage() {
   echo "***************************************************************************"
   echo "Build BIOS rom for VLV platforms."
   echo
-  echo "Usage: bld_vlv.bat  PlatformType [Build Target]"
+  echo "Usage: bld_vlv.sh  [options] PlatformType [Build Target]"
   echo
+  echo "   /c    CleanAll"
+  echo "   /l    Generate build log file"
+  echo "   /y    Generate build report file"
+  echo "   /m    Enable multi-processor build"
+  echo "   /IA32 Set Arch to IA32 (default: X64)"
+  echo "   /X64  Set Arch to X64 (default: X64)"
   echo
   echo "       Platform Types:  MNW2"
   echo "       Build Targets:   Debug, Release  (default: Debug)"
   echo
+  echo "Examples:"
+  echo "   bld_vlv.sh MNW2                 : X64 Debug build for MinnowMax"
+  echo "   bld_vlv.sh /IA32 MNW2 release   : IA32 Release build for MinnowMax"
   echo "***************************************************************************"
-  echo "Press any key......"
-  read
   exit 0
 }
 
+set -e
 
+cd ..
 echo -e $(date)
 ##**********************************************************************
 ## Initial Setup
 ##**********************************************************************
-#WORKSPACE=$(pwd)
 #build_threads=($NUMBER_OF_PROCESSORS)+1
 Build_Flags=
 exitCode=0
+build_threads=1
 Arch=X64
-SpiLock=0
+GenLog=FALSE
+GenReport=FALSE
+Clean=FALSE
 
-## Clean up previous build files.
-if [ -e $(pwd)/EDK2.log ]; then
-  rm $(pwd)/EDK2.log
-fi
 
-if [ -e $(pwd)/Unitool.log ]; then
-  rm $(pwd)/Unitool.log
-fi
-
-if [ -e $(pwd)/Conf/target.txt ]; then
-  rm $(pwd)/Conf/target.txt
-fi
-
-if [ -e $(pwd)/Conf/BiosId.env ]; then
-  rm $(pwd)/Conf/BiosId.env
-fi
-
-if [ -e $(pwd)/Conf/tools_def.txt ]; then
-  rm $(pwd)/Conf/tools_def.txt
-fi
-
-if [ -e $(pwd)/Conf/build_rule.txt ]; then
-  rm $(pwd)/Conf/build_rule.txt
-fi
-
+export CORE_PATH=$WORKSPACE/edk2
+export PLATFORM_PATH=$WORKSPACE/edk2-platforms/Platform/Intel/
+export SILICON_PATH=$WORKSPACE/edk2-platforms/Silicon/Intel/
+export BINARY_PATH=$WORKSPACE/edk2-non-osi/Silicon/Intel/
+export PACKAGES_PATH=$PLATFORM_PATH:$SILICON_PATH:$BINARY_PATH:$CORE_PATH
 
 ## Setup EDK environment. Edksetup puts new copies of target.txt, tools_def.txt, build_rule.txt in WorkSpace\Conf
 ## Also run edksetup as soon as possible to avoid it from changing environment variables we're overriding
+cd $CORE_PATH
 . edksetup.sh BaseTools
 make -C BaseTools
 
 ## Define platform specific environment variables.
+PLATFORM_NAME=Vlv2TbltDevicePkg
 PLATFORM_PACKAGE=Vlv2TbltDevicePkg
-config_file=$WORKSPACE/$PLATFORM_PACKAGE/PlatformPkgConfig.dsc
-auto_config_inc=$WORKSPACE/$PLATFORM_PACKAGE/AutoPlatformCFG.txt
+PLATFORM_PKG_PATH=$PLATFORM_PATH/$PLATFORM_PACKAGE
 
-## default ECP (override with /ECP flag)
-EDK_SOURCE=$WORKSPACE/EdkCompatibilityPkg
-
-## create new AutoPlatformCFG.txt file
-if [ -f "$auto_config_inc" ]; then
-  rm $auto_config_inc
-fi
-touch $auto_config_inc
+cd $PLATFORM_PKG_PATH
 
 ##**********************************************************************
 ## Parse command line arguments
@@ -85,172 +71,165 @@ for (( i=1; i<=$#; ))
   do
     if [ "$1" == "/?" ]; then
       Usage
-    elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/Q" ]; then
-      Build_Flags="$Build_Flags --quiet"
-      shift
     elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/L" ]; then
-      Build_Flags="$Build_Flags -j EKD2.log"
+      GenLog=TRUE
+      shift
+    elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/Y" ]; then
+      GenReport=TRUE
+      shift
+    elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/M" ]; then
+      build_threads=8
       shift
     elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/C" ]; then
-      echo Removing previous build files ...
-      if [ -d "Build" ]; then
-        rm -r Build
-      fi
-      shift
-    elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/ECP" ]; then
-      ECP_SOURCE=$WORKSPACE/EdkCompatibilityPkgEcp
-      EDK_SOURCE=$WORKSPACE/EdkCompatibilityPkgEcp
-      echo DEFINE ECP_BUILD_ENABLE = TRUE >> $auto_config_inc
+      Clean=TRUE
       shift
     elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/X64" ]; then
       Arch=X64
       shift
-    elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/YL" ]; then
-      SpiLock=1
-      shift      
+    elif [ "$(echo $1 | tr 'a-z' 'A-Z')" == "/IA32" ]; then
+      Arch=IA32
+      shift
     else
       break
     fi
   done
-
-
-
-
 
 ## Required argument(s)
 if [ "$2" == "" ]; then
   Usage
 fi
 
-## Remove the values for Platform_Type and Build_Target from BiosIdX.env and stage in Conf
-if [ $Arch == "IA32" ]; then
-  cp $PLATFORM_PACKAGE/BiosIdR.env    Conf/BiosId.env
-  echo DEFINE X64_CONFIG = FALSE      >> $auto_config_inc
-else
-  cp $PLATFORM_PACKAGE/BiosIdx64R.env  Conf/BiosId.env
-  echo DEFINE X64_CONFIG = TRUE       >> $auto_config_inc
-fi
-sed -i '/^BOARD_ID/d' Conf/BiosId.env
-sed -i '/^BUILD_TYPE/d' Conf/BiosId.env
-
-
-
-## -- Build flags settings for each Platform --
-##    AlpineValley (ALPV):  SVP_PF_BUILD = TRUE,   ENBDT_PF_BUILD = FALSE,  TABLET_PF_BUILD = FALSE,  BYTI_PF_BUILD = FALSE, IVI_PF_BUILD = FALSE
-##       BayleyBay (BBAY):  SVP_PF_BUILD = FALSE,  ENBDT_PF_BUILD = TRUE,   TABLET_PF_BUILD = FALSE,  BYTI_PF_BUILD = FALSE, IVI_PF_BUILD = FALSE
-##         BayLake (BLAK):  SVP_PF_BUILD = FALSE,  ENBDT_PF_BUILD = FALSE,  TABLET_PF_BUILD = TRUE,   BYTI_PF_BUILD = FALSE, IVI_PF_BUILD = FALSE
-##      Bakersport (BYTI):  SVP_PF_BUILD = FALSE,  ENBDT_PF_BUILD = FALSE,  TABLET_PF_BUILD = FALSE,  BYTI_PF_BUILD = TRUE, IVI_PF_BUILD = FALSE
-## Crestview Hills (CVHS):  SVP_PF_BUILD = FALSE,  ENBDT_PF_BUILD = FALSE,  TABLET_PF_BUILD = FALSE,  BYTI_PF_BUILD = TRUE, IVI_PF_BUILD = TRUE
-##            FFD8 (BLAK):  SVP_PF_BUILD = FALSE,  ENBDT_PF_BUILD = FALSE,  TABLET_PF_BUILD = TRUE,   BYTI_PF_BUILD = FALSE, IVI_PF_BUILD = FALSE
 echo "Setting  $1  platform configuration and BIOS ID..."
-if [ "$(echo $1 | tr 'a-z' 'A-Z')" == "MNW2" ]; then
-  echo BOARD_ID = MNW2MAX             >> Conf/BiosId.env
-  echo DEFINE ENBDT_PF_BUILD = TRUE  >> $auto_config_inc
-else
-  echo "Error - Unsupported PlatformType: $1"
-  Usage
-fi
-
-Platform_Type=$1
 
 if [ "$(echo $2 | tr 'a-z' 'A-Z')" == "RELEASE" ]; then
-  TARGET=RELEASE
-  BUILD_TYPE=R
-  echo BUILD_TYPE = R >> Conf/BiosId.env
+  export TARGET=RELEASE
 else
-  TARGET=DEBUG
-  BUILD_TYPE=D
-  echo BUILD_TYPE = D >> Conf/BiosId.env
+  export TARGET=DEBUG
 fi
 
-
 ##**********************************************************************
-## Additional EDK Build Setup/Configuration
+## Detect TOOL_CHAIN_TAG
 ##**********************************************************************
-echo "Ensuring correct build directory is present for GenBiosId..."
-
-echo Modifing Conf files for this build...
-## Remove lines with these tags from target.txt
-sed -i '/^ACTIVE_PLATFORM/d' Conf/target.txt
-sed -i '/^TARGET /d' Conf/target.txt
-sed -i '/^TARGET_ARCH/d' Conf/target.txt
-sed -i '/^TOOL_CHAIN_TAG/d' Conf/target.txt
-sed -i '/^MAX_CONCURRENT_THREAD_NUMBER/d' Conf/target.txt
-
 gcc_version=$(gcc -v 2>&1 | tail -1 | awk '{print $3}')
 case $gcc_version in
-    4.9.*|4.1[0-9].*|5.*.*|6.*.*)
-      TARGET_TOOLS=GCC49
-      ;;
-    *)
-      TARGET_TOOLS=GCC48
-      ;;
+      [1-3].*|4.[0-7].*)
+        echo MNW2 requires GCC4.8 or later
+        exit 1
+        ;;
+      4.8.*)
+        export TOOL_CHAIN_TAG=GCC48
+        ;;
+      4.9.*|6.[0-2].*)
+        export TOOL_CHAIN_TAG=GCC49
+        ;;
+      *)
+        export TOOL_CHAIN_TAG=GCC5
+        ;;
 esac
 
-ACTIVE_PLATFORM=$PLATFORM_PACKAGE/PlatformPkgGcc"$Arch".dsc
-TOOL_CHAIN_TAG=$TARGET_TOOLS
-MAX_CONCURRENT_THREAD_NUMBER=1
-echo ACTIVE_PLATFORM = $ACTIVE_PLATFORM                           >> Conf/target.txt
-echo TARGET          = $TARGET                                    >> Conf/target.txt
-echo TOOL_CHAIN_TAG  = $TOOL_CHAIN_TAG                            >> Conf/target.txt
-echo MAX_CONCURRENT_THREAD_NUMBER = $MAX_CONCURRENT_THREAD_NUMBER >> Conf/target.txt
-if [ $Arch == "IA32" ]; then
-  echo TARGET_ARCH   = IA32                                       >> Conf/target.txt
-else
-  echo TARGET_ARCH   = IA32 X64                                   >> Conf/target.txt
+##**********************************************************************
+## Generate $BUILD_PATH and make sure the directory exists
+##**********************************************************************
+if [ ! -d ${WORKSPACE}/Build ]; then
+  mkdir ${WORKSPACE}/Build
 fi
+
+if [ $Arch == "IA32" ]; then
+  if [ ! -d ${WORKSPACE}/Build/${PLATFORM_NAME}IA32 ]; then
+    mkdir ${WORKSPACE}/Build/${PLATFORM_NAME}IA32
+  fi
+  BUILD_PATH=${WORKSPACE}/Build/${PLATFORM_NAME}IA32/${TARGET}_${TOOL_CHAIN_TAG}
+else
+  if [ ! -d ${WORKSPACE}/Build/${PLATFORM_NAME} ]; then
+    mkdir ${WORKSPACE}/Build/${PLATFORM_NAME}
+  fi
+  BUILD_PATH=${WORKSPACE}/Build/${PLATFORM_NAME}/${TARGET}_${TOOL_CHAIN_TAG}
+fi
+
+if [ ! -d $BUILD_PATH ]; then
+  mkdir $BUILD_PATH
+fi
+
+##**********************************************************************
+## Check for clean operation
+##**********************************************************************
+if [ $Clean == "TRUE" ]; then
+  echo Removing previous build files ...
+  if [ -d ${BUILD_PATH} ]; then
+    rm -r ${BUILD_PATH}
+  fi
+  if [ -d ${WORKSPACE}/Conf/.cache ]; then
+    rm -r ${WORKSPACE}/Conf/.cache
+  fi
+  exit 0
+fi
+
+##**********************************************************************
+## Generate Build_Flags
+##**********************************************************************
+
+Build_Flags="$Build_Flags -b $TARGET"
+if [ $Arch == "IA32" ]; then
+  Build_Flags="$Build_Flags -a IA32"
+else
+  Build_Flags="$Build_Flags -a IA32 -a X64"
+fi
+Build_Flags="$Build_Flags -t $TOOL_CHAIN_TAG"
+Build_Flags="$Build_Flags -p ${PLATFORM_PKG_PATH}/PlatformPkgGcc${Arch}.dsc"
+Build_Flags="$Build_Flags -n $build_threads"
+if [ $GenLog == "TRUE" ]; then
+  Build_Flags="$Build_Flags -j ${BUILD_PATH}/${PLATFORM_NAME}.log"
+fi
+if [ $GenReport == "TRUE" ]; then
+  Build_Flags="$Build_Flags -y ${BUILD_PATH}/${PLATFORM_NAME}.report"
+fi
+
+##**********************************************************************
+## Generate BIOS ID
+##**********************************************************************
+
+echo BOARD_ID       = MNW2MAX >  $BUILD_PATH/BiosId.env
+echo BOARD_REV      = 1       >> $BUILD_PATH/BiosId.env
+if [ $Arch == "IA32" ]; then
+  echo BOARD_EXT      = I32   >> $BUILD_PATH/BiosId.env
+fi
+if [ $Arch == "X64" ]; then
+  echo BOARD_EXT      = X64   >> $BUILD_PATH/BiosId.env
+fi
+echo VERSION_MAJOR  = 0090    >> $BUILD_PATH/BiosId.env
+if [ $TARGET == "DEBUG" ]; then
+  echo BUILD_TYPE     = D     >> $BUILD_PATH/BiosId.env
+fi
+if [ $TARGET == "RELEASE" ]; then
+  echo BUILD_TYPE     = R     >> $BUILD_PATH/BiosId.env
+fi
+echo VERSION_MINOR  = 01      >> $BUILD_PATH/BiosId.env
+
+python $WORKSPACE/edk2-platforms/Platform/Intel/Tools/GenBiosId/GenBiosId.py -i $BUILD_PATH/BiosId.env -o $BUILD_PATH/BiosId.bin -ot $BUILD_PATH/BiosId.txt
 
 ##**********************************************************************
 ## Build BIOS
 ##**********************************************************************
-echo Skip "Running UniTool..."
-echo "Make GenBiosId Tool..."
-BUILD_PATH=Build/$PLATFORM_PACKAGE/"$TARGET"_"$TOOL_CHAIN_TAG"
-if [ ! -d "$BUILD_PATH/$Arch" ]; then
-  mkdir -p $BUILD_PATH/$Arch
-fi
-if [ -e "$BUILD_PATH/$Arch/BiosId.bin" ]; then
-  rm -f $BUILD_PATH/$Arch/BiosId.bin
-fi
-
-
-./$PLATFORM_PACKAGE/GenBiosId -i Conf/BiosId.env -o $BUILD_PATH/$Arch/BiosId.bin
-
-
 echo "Invoking EDK2 build..."
-build
-
-if [ $SpiLock == "1" ]; then
-  IFWI_HEADER_FILE=./$PLATFORM_PACKAGE/Stitch/IFWIHeader/IFWI_HEADER_SPILOCK.bin
-else
-  IFWI_HEADER_FILE=./$PLATFORM_PACKAGE/Stitch/IFWIHeader/IFWI_HEADER.bin
-fi
-
-echo $IFWI_HEADER_FILE
+echo build $Build_Flags
+build $Build_Flags
 
 ##**********************************************************************
 ## Post Build processing and cleanup
 ##**********************************************************************
-
 echo Skip "Running fce..."
 
-echo Skip "Running KeyEnroll..."
+cp -f $BUILD_PATH/FV/VLV.fd $BUILD_PATH/FV/Vlv.ROM
 
-## Set the Board_Id, Build_Type, Version_Major, and Version_Minor environment variables
-VERSION_MAJOR=$(grep '^VERSION_MAJOR' Conf/BiosId.env | cut -d ' ' -f 3 | cut -c 1-4)
-VERSION_MINOR=$(grep '^VERSION_MINOR' Conf/BiosId.env | cut -d ' ' -f 3 | cut -c 1-2)
-BOARD_ID=$(grep '^BOARD_ID' Conf/BiosId.env | cut -d ' ' -f 3 | cut -c 1-7)
-BIOS_Name="$BOARD_ID"_"$Arch"_"$BUILD_TYPE"_"$VERSION_MAJOR"_"$VERSION_MINOR".ROM
-BIOS_ID="$BOARD_ID"_"$Arch"_"$BUILD_TYPE"_"$VERSION_MAJOR"_"$VERSION_MINOR"_GCC.bin
-SEC_VERSION=1.0.2.1060v5
-cat $IFWI_HEADER_FILE ../Vlv2Binaries/Vlv2SocBinPkg/SEC/$SEC_VERSION/VLV_SEC_REGION.bin ../Vlv2Binaries/Vlv2SocBinPkg/SEC/$SEC_VERSION/Vacant.bin $BUILD_PATH/FV/VLV.fd > ./$PLATFORM_PACKAGE/Stitch/$BIOS_ID
+##**********************************************************************
+## Build Capsules
+##**********************************************************************
+if [ $Arch == "X64" ]; then
+  echo "Invoking EDK2 build for capsules..."
+  echo build -t $TOOL_CHAIN_TAG -p $PLATFORM_PKG_PATH/PlatformCapsuleGcc.dsc
+  build -t $TOOL_CHAIN_TAG -p $PLATFORM_PKG_PATH/PlatformCapsuleGcc.dsc
+fi
 
-
-echo Skip "Running BIOS_Signing ..."
-
-echo
-echo Build location:     $BUILD_PATH
-echo BIOS ROM Created:   $BIOS_Name
 echo
 echo -------------------- The EDKII BIOS build has successfully completed. --------------------
 echo

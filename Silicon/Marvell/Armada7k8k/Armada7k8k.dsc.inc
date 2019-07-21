@@ -56,6 +56,10 @@
   PlatformFlashAccessLib|Silicon/Marvell/Armada7k8k/Feature/Capsule/PlatformFlashAccessLib/PlatformFlashAccessLib.inf
 !endif
 
+!if $(NETWORK_TLS_ENABLE)
+  TlsLib|CryptoPkg/Library/TlsLib/TlsLib.inf
+!endif
+
 # Basic utility libraries
   BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
 !if $(CAPSULE_ENABLE)
@@ -90,6 +94,7 @@
   UefiBootManagerLib|MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
   UefiHiiServicesLib|MdeModulePkg/Library/UefiHiiServicesLib/UefiHiiServicesLib.inf
   UefiRuntimeLib|MdePkg/Library/UefiRuntimeLib/UefiRuntimeLib.inf
+  UefiUsbLib|MdePkg/Library/UefiUsbLib/UefiUsbLib.inf
 
   PcdLib|MdePkg/Library/DxePcdLib/DxePcdLib.inf
 
@@ -270,6 +275,10 @@
   gEfiMdePkgTokenSpaceGuid.PcdDefaultTerminalType|1
   gEfiMdePkgTokenSpaceGuid.PcdPlatformBootTimeOut|3
 
+  gEfiMdeModulePkgTokenSpaceGuid.PcdMaxVariableSize|0x2000
+  gEfiMdeModulePkgTokenSpaceGuid.PcdMaxAuthVariableSize|0x2800
+
+
   # Required for Intel BDS
   gEfiMdeModulePkgTokenSpaceGuid.PcdResetOnMemoryTypeInformationChange|FALSE
 
@@ -389,6 +398,11 @@
   gMarvellTokenSpaceGuid.PcdOpTeeRegionBase|0x4400000
   gMarvellTokenSpaceGuid.PcdOpTeeRegionSize|0x1000000
 
+  # SMBIOS/DMI
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosDocRev|0x0
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosEntryPointProvideMethod|0x2
+  gEfiMdeModulePkgTokenSpaceGuid.PcdSmbiosVersion|0x0302
+
   # TRNG
   gMarvellTokenSpaceGuid.PcdEip76TrngBaseAddress|0xF2760000
 
@@ -505,6 +519,7 @@
   MdeModulePkg/Bus/Pci/XhciDxe/XhciDxe.inf
   MdeModulePkg/Bus/Usb/UsbBusDxe/UsbBusDxe.inf
   MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
+  MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
 
   # SD/MMC
   MdeModulePkg/Bus/Sd/EmmcDxe/EmmcDxe.inf
@@ -516,6 +531,7 @@
   ArmPkg/Drivers/ArmPciCpuIo2Dxe/ArmPciCpuIo2Dxe.inf
   MdeModulePkg/Bus/Pci/PciHostBridgeDxe/PciHostBridgeDxe.inf
   MdeModulePkg/Bus/Pci/PciBusDxe/PciBusDxe.inf
+  MdeModulePkg/Bus/Pci/NvmExpressDxe/NvmExpressDxe.inf
 
   # Console packages
   MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
@@ -603,6 +619,10 @@
 !ifdef $(INCLUDE_TFTP_COMMAND)
   ShellPkg/DynamicCommand/TftpDynamicCommand/TftpDynamicCommand.inf
 !endif #$(INCLUDE_TFTP_COMMAND)
+
+  # SMBIOS/DMI
+  MdeModulePkg/Universal/SmbiosDxe/SmbiosDxe.inf
+  Silicon/Marvell/Drivers/SmbiosPlatformDxe/SmbiosPlatformDxe.inf
 
 [Components.AARCH64]
   #

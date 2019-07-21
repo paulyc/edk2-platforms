@@ -1,11 +1,8 @@
 /*++
 
-  Copyright (c) 2004  - 2014, Intel Corporation. All rights reserved.<BR>
-                                                                                   
+  Copyright (c) 2004  - 2019, Intel Corporation. All rights reserved.<BR>
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
-
-                                                                                   
-
 
 Module Name:
 
@@ -26,7 +23,6 @@ Abstract:
 //
 // Statements that include other header files.
 //
-#include <FrameworkDxe.h>
 #include <PiDxe.h>
 #include <Base.h>
 #include <Library/UefiLib.h>
@@ -34,13 +30,12 @@ Abstract:
 #include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiRuntimeServicesTableLib.h>
 #include <Library/DebugLib.h>
-#include <Protocol/FirmwareVolume.h>
+#include <Protocol/FirmwareVolume2.h>
 #include <Library/PcdLib.h>
 #include <IndustryStandard/HighPrecisionEventTimerTable.h>
 #include <IndustryStandard/Acpi.h>
 #include <Protocol/AcpiSystemDescriptionTable.h>
 #include <Protocol/MpService.h>
-#include <Protocol/CpuIo.h>
 #include <IndustryStandard/Acpi30.h>
 #include <IndustryStandard/Acpi20.h>
 #include <Library/HobLib.h>

@@ -1,11 +1,8 @@
 /** @file
 
-  Copyright (c) 2004  - 2014, Intel Corporation. All rights reserved.<BR>
-                                                                                   
+  Copyright (c) 2004  - 2019, Intel Corporation. All rights reserved.<BR>
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
-
-                                                                                   
-
 
 Module Name:
 
@@ -19,7 +16,6 @@ Revision History:
 --*/
 
 #include "PlatformSetupDxe.h"
-#include <Protocol/LegacyBios.h>
 #include <Protocol/PciRootBridgeIo.h>
 #include <Protocol/SimpleNetwork.h>
 #include <Protocol/DevicePath.h>
@@ -27,12 +23,12 @@ Revision History:
 #include <Protocol/IdeControllerInit.h>
 #include <Protocol/MpService.h>
 #include <Protocol/PchPlatformPolicy.h>
-#include <Protocol/CpuIo2.h>
 #include <Protocol/Smbios.h>
 #include <IndustryStandard/SmBios.h>
 #include <Library/IoLib.h>
-#include <Library/I2CLib.h>
 #include <Guid/GlobalVariable.h>
+#include <Register/Cpuid.h>
+#include <Register/Msr.h>
 
 #include "Valleyview.h"
 #include "VlvAccess.h"
@@ -80,14 +76,10 @@ SB_REV  SBRevisionTable[] = {
 #define PREFIX_ZERO   0x20
 
 #define ICH_REG_REV                 0x08
-#define MSR_IA32_PLATFORM_ID        0x17
 
 
 BOOLEAN                         mSetupInfoDone = FALSE;
 UINT8                           mUseProductKey = 0;
-EFI_EXP_BASE10_DATA             mProcessorFrequency;
-EFI_EXP_BASE10_DATA             mProcessorFsbFrequency;
-
 EFI_GUID                        mProcessorProducerGuid;
 EFI_HII_HANDLE                  mHiiHandle;
 EFI_PLATFORM_CPU_INFO           mPlatformCpuInfo;
@@ -97,50 +89,7 @@ EFI_PLATFORM_INFO_HOB           *mPlatformInfo;
 
 #define memset SetMem
 
-UINT16                mMemorySpeed         = 0xffff;
-EFI_PHYSICAL_ADDRESS  mMemorySizeChannelASlot0  = 0;
-UINT16                mMemorySpeedChannelASlot0 = 0xffff;
-EFI_PHYSICAL_ADDRESS  mMemorySizeChannelASlot1  = 0;
-UINT16                mMemorySpeedChannelASlot1 = 0xffff;
-EFI_PHYSICAL_ADDRESS  mMemorySizeChannelBSlot0  = 0;
-UINT16                mMemorySpeedChannelBSlot0 = 0xffff;
-EFI_PHYSICAL_ADDRESS  mMemorySizeChannelBSlot1  = 0;
-UINT16                mMemorySpeedChannelBSlot1 = 0xffff;
-EFI_PHYSICAL_ADDRESS  mMemorySizeChannelCSlot0  = 0;
-UINT16                mMemorySpeedChannelCSlot0 = 0xffff;
-EFI_PHYSICAL_ADDRESS  mMemorySizeChannelCSlot1  = 0;
-UINT16                mMemorySpeedChannelCSlot1 = 0xffff;
-UINTN                 mMemoryMode          = 0xff;
-
 #define CHARACTER_NUMBER_FOR_VALUE  30
-  typedef struct {
-  EFI_STRING_TOKEN            MemoryDeviceLocator;
-  EFI_STRING_TOKEN            MemoryBankLocator;
-  EFI_STRING_TOKEN            MemoryManufacturer;
-  EFI_STRING_TOKEN            MemorySerialNumber;
-  EFI_STRING_TOKEN            MemoryAssetTag;
-  EFI_STRING_TOKEN            MemoryPartNumber;
-  EFI_INTER_LINK_DATA         MemoryArrayLink;
-  EFI_INTER_LINK_DATA         MemorySubArrayLink;
-  UINT16                      MemoryTotalWidth;
-  UINT16                      MemoryDataWidth;
-  UINT64                      MemoryDeviceSize;
-  EFI_MEMORY_FORM_FACTOR      MemoryFormFactor;
-  UINT8                       MemoryDeviceSet;
-  EFI_MEMORY_ARRAY_TYPE       MemoryType;
-  EFI_MEMORY_TYPE_DETAIL      MemoryTypeDetail;
-  UINT16                      MemorySpeed;
-  EFI_MEMORY_STATE            MemoryState;
-} EFI_MEMORY_ARRAY_LINK;
-
-
-typedef struct {
-  EFI_PHYSICAL_ADDRESS        MemoryArrayStartAddress;
-  EFI_PHYSICAL_ADDRESS        MemoryArrayEndAddress;
-  EFI_INTER_LINK_DATA         PhysicalMemoryArrayLink;
-  UINT16                      MemoryArrayPartitionWidth;
-} EFI_MEMORY_ARRAY_START_ADDRESS;
-
 
 typedef enum {
   PCH_SATA_MODE_IDE = 0,
@@ -428,73 +377,6 @@ VOID UpdateLatestBootTime() {
 }
 
 /**
-  Get Cache Type for the specified Cache. This function is invoked when there is data records
-  available in the Data Hub.
-
-  Get Cache Type function arguments:
-
-  @param  Instance        The instance number of the subclass with the same ProducerName..
-  @param  SubInstance     The instance number of the RecordType for the same Instance.
-  @param  CacheType       Cache type, see definition of EFI_CACHE_TYPE_DATA.
-
-  @retval EFI_STATUS
-
-**/
-EFI_STATUS
-GetCacheType(
-  IN  UINT16                            Instance,
-  IN  UINT16                            SubInstance,
-  IN  EFI_CACHE_TYPE_DATA*              CacheType)
-{
-  EFI_STATUS                  Status;
-  EFI_DATA_HUB_PROTOCOL       *DataHub;
-  EFI_DATA_RECORD_HEADER      *Record;
-  UINT64                      MonotonicCount;
-  EFI_CACHE_VARIABLE_RECORD*  CacheVariableRecord;
-  EFI_SUBCLASS_TYPE1_HEADER   *DataHeader;
-
-  Status = gBS->LocateProtocol (
-                  &gEfiDataHubProtocolGuid,
-                  NULL,
-                  (void **)&DataHub
-                  );
-  ASSERT_EFI_ERROR(Status);
-
-  //
-  // Get all available data records from data hub
-  //
-  MonotonicCount = 0;
-  Record = NULL;
-
-  do {
-    Status = DataHub->GetNextRecord (
-	                    DataHub,
-						&MonotonicCount,
-						NULL,
-						&Record
-						);
-    if (!EFI_ERROR(Status)) {
-      if (Record->DataRecordClass == EFI_DATA_RECORD_CLASS_DATA) {
-        DataHeader  = (EFI_SUBCLASS_TYPE1_HEADER *)(Record + 1);
-
-        if(CompareGuid(&Record->DataRecordGuid, &gEfiCacheSubClassGuid) &&
-          (DataHeader->RecordType == CacheTypeRecordType) &&
-          (DataHeader->Instance == Instance) &&
-          (DataHeader->SubInstance == SubInstance)) {
-          CacheVariableRecord     = (EFI_CACHE_VARIABLE_RECORD  *)(DataHeader + 1);
-          if(CacheType){
-            *CacheType = CacheVariableRecord->CacheType;
-            return EFI_SUCCESS;
-          }
-        }
-      }
-    }
-  } while(!EFI_ERROR(Status) && (MonotonicCount != 0));
-
-  return EFI_NOT_FOUND;
-}
-
-/**
   Setup data filter function. This function is invoked when there is data records
   available in the Data Hub.
 
@@ -510,230 +392,23 @@ VOID
 PrepareSetupInformation (
   )
 {
-
   EFI_STATUS                  Status;
-  EFI_DATA_HUB_PROTOCOL       *DataHub;
-  EFI_DATA_RECORD_HEADER      *Record;
-  UINT8                       *SrcData;
-  EFI_SUBCLASS_TYPE1_HEADER   *DataHeader;
   CHAR16                      *NewString;
-  CHAR16                      *NewString2;
-  CHAR16                      *NewStringToken;
   STRING_REF                  TokenToUpdate;
-  EFI_PROCESSOR_VERSION_DATA  *ProcessorVersion;
-  UINTN                       Index;
-  UINTN                       DataOutput;
-
-  EFI_PROCESSOR_MICROCODE_REVISION_DATA   *CpuUcodeRevisionData;
-  EFI_MEMORY_ARRAY_START_ADDRESS          *MemoryArray;
-  EFI_MEMORY_ARRAY_LINK                   *MemoryArrayLink;
-  UINT64                      MonotonicCount;
-
   CHAR16                      Version[100];         //Assuming that strings are < 100 UCHAR
   CHAR16                      ReleaseDate[100];     //Assuming that strings are < 100 UCHAR
   CHAR16                      ReleaseTime[100];     //Assuming that strings are < 100 UCHAR
 
   NewString = AllocateZeroPool (0x100);
-  NewString2 = AllocateZeroPool (0x100);
   SetMem(Version, sizeof(Version), 0);
   SetMem(ReleaseDate, sizeof(ReleaseDate), 0);
   SetMem(ReleaseTime, sizeof(ReleaseTime), 0);
 
-  //
-  // Get the Data Hub Protocol. Assume only one instance
-  //
-  Status = gBS->LocateProtocol (&gEfiDataHubProtocolGuid, NULL, (void **)&DataHub);
-  ASSERT_EFI_ERROR(Status);
-
-  //
-  // Get all available data records from data hub
-  //
-  MonotonicCount = 0;
-  Record = NULL;
-
-  do {
-    Status = DataHub->GetNextRecord (DataHub, &MonotonicCount, NULL, &Record);
-    if (!EFI_ERROR(Status)) {
-      if (Record->DataRecordClass == EFI_DATA_RECORD_CLASS_DATA) {
-        DataHeader  = (EFI_SUBCLASS_TYPE1_HEADER *)(Record + 1);
-        SrcData     = (UINT8  *)(DataHeader + 1);
-
-        //
-        // Processor
-        //
-        if (CompareGuid(&Record->DataRecordGuid, &gEfiProcessorSubClassGuid)) {
-          CopyMem (&mProcessorProducerGuid, &Record->ProducerName, sizeof(EFI_GUID));
-          switch (DataHeader->RecordType) {
-            case ProcessorCoreFrequencyRecordType:
-              CopyMem(&mProcessorFrequency, SrcData, sizeof(EFI_EXP_BASE10_DATA));
-              Index = EfiValueToString (
-			            NewString,
-						ConvertBase10ToRaw ((EFI_EXP_BASE10_DATA *)SrcData)/1000000000,
-						PREFIX_ZERO,
-						0
-						);
-              StrCat (NewString, L".");
-              EfiValueToString (
-			    NewString + Index + 1,
-				((ConvertBase10ToRaw ((EFI_EXP_BASE10_DATA *)SrcData)%1000000000)/10000000),
-				PREFIX_ZERO,
-				0
-				);
-              StrCat (NewString, L" GHz");
-              TokenToUpdate = (STRING_REF)STR_PROCESSOR_SPEED_VALUE;
-              HiiSetString(mHiiHandle, TokenToUpdate, NewString, NULL);
-              break;
-
-            case ProcessorVersionRecordType:
-              ProcessorVersion = (EFI_PROCESSOR_VERSION_DATA *)SrcData;
-              NewStringToken = HiiGetPackageString(&mProcessorProducerGuid, *ProcessorVersion, NULL);
-              TokenToUpdate = (STRING_REF)STR_PROCESSOR_VERSION_VALUE;
-              HiiSetString(mHiiHandle, TokenToUpdate, NewStringToken, NULL);
-              break;
-            case CpuUcodeRevisionDataRecordType:
-              CpuUcodeRevisionData = (EFI_PROCESSOR_MICROCODE_REVISION_DATA *) SrcData;
-              if (CpuUcodeRevisionData->ProcessorMicrocodeRevisionNumber != 0) {
-                EfiValueToHexStr (
-				  NewString,
-                  CpuUcodeRevisionData->ProcessorMicrocodeRevisionNumber,
-                  PREFIX_ZERO,
-                  8
-				  );
-                TokenToUpdate = (STRING_REF)STR_PROCESSOR_MICROCODE_VALUE;
-                HiiSetString(mHiiHandle, TokenToUpdate, NewString, NULL);
-              }
-              break;
-            default:
-              break;
-          }
-
-        //
-        // Cache
-        //
-        } else if (CompareGuid(&Record->DataRecordGuid, &gEfiCacheSubClassGuid) &&
-                   (DataHeader->RecordType == CacheSizeRecordType)) {
-          if (DataHeader->SubInstance == EFI_CACHE_L1) {
-            EFI_CACHE_TYPE_DATA              CacheType;
-            if (EFI_SUCCESS == GetCacheType(DataHeader->Instance, DataHeader->SubInstance,&CacheType)){
-              if (CacheType == EfiCacheTypeData) {
-                TokenToUpdate = (STRING_REF)STR_PROCESSOR_L1_DATA_CACHE_VALUE;
-              } else if (CacheType == EfiCacheTypeInstruction) {
-                  TokenToUpdate = (STRING_REF)STR_PROCESSOR_L1_INSTR_CACHE_VALUE;
-              } else {
-                continue;
-              }
-            } else {
-              continue;
-            }
-          }
-          else if (DataHeader->SubInstance == EFI_CACHE_L2) {
-            TokenToUpdate = (STRING_REF)STR_PROCESSOR_L2_CACHE_VALUE;
-          } else {
-            continue;
-          }
-          if (ConvertBase2ToRaw((EFI_EXP_BASE2_DATA *)SrcData)) {
-            DataOutput = ConvertBase2ToRaw((EFI_EXP_BASE2_DATA *)SrcData) >> 10;
-            EfiValueToString (NewString, DataOutput, PREFIX_ZERO, 0);
-
-            StrCat (NewString, L" KB");
-            if (DataHeader->SubInstance == EFI_CACHE_L3) {
-              HiiSetString(mHiiHandle, TokenToUpdate, NewString, NULL);
-            } else if(DataHeader->SubInstance == EFI_CACHE_L2 && mPlatformCpuInfo.CpuPackage.CoresPerPhysicalPackage > 1){
-			  //
-              // Show XxL2 string
-			  //
-              EfiValueToString (
-			    NewString2,
-                mPlatformCpuInfo.CpuPackage.CoresPerPhysicalPackage,
-                PREFIX_ZERO,
-                0
-				);
-              StrCat(NewString2, L"x ");
-              StrCat(NewString2, NewString);
-              HiiSetString(mHiiHandle, TokenToUpdate, NewString2, NULL);
-            } else {
-              HiiSetString(mHiiHandle, TokenToUpdate, NewString, NULL);
-            }
-          }
-
-        //
-        // Memory
-        //
-        } else if (CompareGuid(&Record->DataRecordGuid, &gEfiMemorySubClassGuid)) {
-          switch (DataHeader->RecordType) {
-            case EFI_MEMORY_ARRAY_LINK_RECORD_NUMBER:
-              MemoryArrayLink = (EFI_MEMORY_ARRAY_LINK *)SrcData;
-
-              if (MemoryArrayLink->MemorySpeed > 0) {
-                //
-                // Save the lowest speed memory module
-                //
-                if (MemoryArrayLink->MemorySpeed < mMemorySpeed) {
-                  mMemorySpeed = MemoryArrayLink->MemorySpeed;
-                }
-                switch (DataHeader->SubInstance) {
-                  case 1:
-                    mMemorySpeedChannelASlot0 = MemoryArrayLink->MemorySpeed;
-                    mMemorySizeChannelASlot0 = MemoryArrayLink->MemoryDeviceSize;
-                    break;
-                  case 2:
-                    mMemorySpeedChannelASlot1 = MemoryArrayLink->MemorySpeed;
-                    mMemorySizeChannelASlot1 = MemoryArrayLink->MemoryDeviceSize;
-                    break;
-                  case 3:
-                    mMemorySpeedChannelBSlot0 = MemoryArrayLink->MemorySpeed;
-                    mMemorySizeChannelBSlot0 = MemoryArrayLink->MemoryDeviceSize;
-                    break;
-                  case 4:
-                    mMemorySpeedChannelBSlot1 = MemoryArrayLink->MemorySpeed;
-                    mMemorySizeChannelBSlot1 = MemoryArrayLink->MemoryDeviceSize;
-                    break;
-                  case 5:
-                    mMemorySpeedChannelCSlot0 = MemoryArrayLink->MemorySpeed;
-                    mMemorySizeChannelCSlot0 = MemoryArrayLink->MemoryDeviceSize;
-                    break;
-                  case 6:
-                    mMemorySpeedChannelCSlot1 = MemoryArrayLink->MemorySpeed;
-                    mMemorySizeChannelCSlot1 = MemoryArrayLink->MemoryDeviceSize;
-                    break;
-                  default:
-                    break;
-                  }
-              }
-              break;
-
-            case EFI_MEMORY_ARRAY_START_ADDRESS_RECORD_NUMBER:
-              MemoryArray = (EFI_MEMORY_ARRAY_START_ADDRESS *)SrcData;
-              if (MemoryArray->MemoryArrayEndAddress - MemoryArray->MemoryArrayStartAddress) {
-              	DataOutput = (UINTN)RShiftU64((MemoryArray->MemoryArrayEndAddress - MemoryArray->MemoryArrayStartAddress + 1), 20);
-              	EfiValueToString (NewString, DataOutput / 1024, PREFIX_ZERO, 0);
-              	if(DataOutput % 1024) {
-              	  StrCat (NewString, L".");
-              	  DataOutput = ((DataOutput % 1024) * 1000) / 1024;
-              	  while(!(DataOutput % 10))
-              	    DataOutput = DataOutput / 10;
-                  EfiValueToString (NewString2, DataOutput, PREFIX_ZERO, 0);
-                  StrCat (NewString, NewString2);
-                }
-                StrCat (NewString, L" GB");
-                TokenToUpdate = (STRING_REF)STR_TOTAL_MEMORY_SIZE_VALUE;
-                HiiSetString(mHiiHandle, TokenToUpdate, NewString, NULL);
-              }
-              break;
-
-            default:
-              break;
-          }
-        }
-      }
-    }
-  } while (!EFI_ERROR(Status) && (MonotonicCount != 0));
-
   Status = GetBiosVersionDateTime (
              Version,
-			 ReleaseDate,
-			 ReleaseTime
-			 );
+             ReleaseDate,
+             ReleaseTime
+             );
 
   DEBUG ((EFI_D_ERROR, "GetBiosVersionDateTime :%s %s %s \n", Version, ReleaseDate, ReleaseTime));
   if (!EFI_ERROR (Status)) {
@@ -756,24 +431,7 @@ PrepareSetupInformation (
     HiiSetString(mHiiHandle, TokenToUpdate, BuildDateTime, NULL);
   }
 
-  //
-  // Calculate and update memory speed display in Main Page
-  //
-  //
-  // Update the overall memory speed
-  //
-  if (mMemorySpeed != 0xffff) {
-    EfiValueToString (NewString, mMemorySpeed, PREFIX_ZERO, 0);
-    StrCat (NewString, L" MHz");
-
-    TokenToUpdate = (STRING_REF)STR_SYSTEM_MEMORY_SPEED_VALUE;
-    HiiSetString(mHiiHandle, TokenToUpdate, NewString, NULL);
-  }
-
   gBS->FreePool(NewString);
-  gBS->FreePool(NewString2);
-
-  return;
 }
 
 /**
@@ -788,65 +446,23 @@ UpdateAdditionalInformation (
   )
 {
   EFI_STATUS                      Status;
-  UINT64                          MonotonicCount;
-  EFI_DATA_HUB_PROTOCOL           *DataHub;
-  EFI_DATA_RECORD_HEADER          *Record;
-  EFI_SUBCLASS_TYPE1_HEADER       *DataHeader;
   EFI_SMBIOS_PROTOCOL             *Smbios;
   EFI_SMBIOS_HANDLE               SmbiosHandle;
   EFI_SMBIOS_TABLE_HEADER         *SmbiosRecord;
   SMBIOS_TABLE_TYPE0              *Type0Record;
+  SMBIOS_TABLE_TYPE4              *Type4Record;
+  SMBIOS_TABLE_TYPE7              *Type7Record;
+  SMBIOS_TABLE_TYPE17             *Type17Record;
   UINT8                           StrIndex;
   CHAR16                          *BiosVersion = NULL;
+  CHAR16                          *ProcessorVersion = NULL;
   CHAR16                          *IfwiVersion = NULL;
   UINT16                          SearchIndex;
   EFI_STRING_ID                   TokenToUpdate;
-#if defined( RVP_SUPPORT ) && RVP_SUPPORT
-  EFI_MISC_SYSTEM_MANUFACTURER    *SystemManufacturer;
-#endif
-
-  Status = gBS->LocateProtocol (
-                  &gEfiDataHubProtocolGuid,
-                  NULL,
-                  (void **)&DataHub
-                  );
-
-  ASSERT_EFI_ERROR(Status);
-
-  MonotonicCount  = 0;
-  Record = NULL;
-  do {
-    Status = DataHub->GetNextRecord (
-                        DataHub,
-                        &MonotonicCount,
-                        NULL,
-                        &Record
-                        );
-    if (Record->DataRecordClass == EFI_DATA_RECORD_CLASS_DATA) {
-      DataHeader  = (EFI_SUBCLASS_TYPE1_HEADER *)(Record + 1);
-
-      if (CompareGuid(&Record->DataRecordGuid, &gEfiMiscSubClassGuid) &&
-          (DataHeader->RecordType == EFI_MISC_SYSTEM_MANUFACTURER_RECORD_NUMBER)) {
-#if defined( RVP_SUPPORT ) && RVP_SUPPORT
-        //
-        // System Information
-        //
-        SystemManufacturer = (EFI_MISC_SYSTEM_MANUFACTURER *)(DataHeader + 1);
-
-        //
-        // UUID  (System Information)
-        //
-        SMBIOSString = EfiLibAllocateZeroPool (0x100);
-        GuidToString ( &SystemManufacturer->SystemUuid, SMBIOSString, 0x00 );
-
-        TokenToUpdate = (STRING_REF)STR_SYSTEM_UUID_VALUE;
-        HiiSetString(mHiiHandle, TokenToUpdate, SMBIOSString, NULL);
-
-        gBS->FreePool(SMBIOSString);
-#endif
-      }
-    }
-  } while (!EFI_ERROR(Status) && (MonotonicCount != 0));
+  UINT32                          MicrocodeRevision;
+  CHAR16                          NewString[0x100];
+  UINTN                           TotalMemorySize;
+  UINT16                          MemorySpeed;
 
   Status = gBS->LocateProtocol (
                   &gEfiSmbiosProtocolGuid,
@@ -856,6 +472,8 @@ UpdateAdditionalInformation (
   ASSERT_EFI_ERROR (Status);
 
   SmbiosHandle = SMBIOS_HANDLE_PI_RESERVED;
+  TotalMemorySize = 0;
+  MemorySpeed = 0xffff;
   do {
     Status = Smbios->GetNext (
                        Smbios,
@@ -864,6 +482,70 @@ UpdateAdditionalInformation (
                        &SmbiosRecord,
                        NULL
                        );
+
+
+    if (SmbiosRecord->Type == EFI_SMBIOS_TYPE_PROCESSOR_INFORMATION) {
+      Type4Record = (SMBIOS_TABLE_TYPE4 *) SmbiosRecord;
+      UnicodeSPrint (NewString, sizeof (NewString), L"%d.%d GHz",
+        Type4Record->CurrentSpeed / 1000,
+        Type4Record->CurrentSpeed % 1000
+        );
+      HiiSetString (mHiiHandle, STR_PROCESSOR_SPEED_VALUE, NewString, NULL);
+
+      StrIndex = Type4Record->ProcessorVersion;
+      GetOptionalStringByIndex ((CHAR8*)((UINT8*)Type4Record + Type4Record->Hdr.Length), StrIndex, &ProcessorVersion);
+      HiiSetString (mHiiHandle, STR_PROCESSOR_VERSION_VALUE, ProcessorVersion, NULL);
+
+      MicrocodeRevision = (UINT32) RShiftU64 (AsmReadMsr64 (MSR_IA32_BIOS_SIGN_ID), 32);
+      UnicodeSPrint (NewString, sizeof (NewString), L"%8x", MicrocodeRevision);
+      HiiSetString (mHiiHandle, STR_PROCESSOR_MICROCODE_VALUE, NewString, NULL);
+    }
+    if (SmbiosRecord->Type == SMBIOS_TYPE_CACHE_INFORMATION) {
+      Type7Record = (SMBIOS_TABLE_TYPE7 *) SmbiosRecord;
+      UnicodeSPrint (NewString, sizeof (NewString), L"%d KB", Type7Record->InstalledSize);
+      switch (Type7Record->CacheConfiguration & 0x03) {
+      case 0:
+        //
+        // Level 1 Cache
+        //
+        if (Type7Record->SystemCacheType == CacheTypeInstruction) {
+          HiiSetString (mHiiHandle, STR_PROCESSOR_L1_INSTR_CACHE_VALUE, NewString, NULL);
+        }
+        if (Type7Record->SystemCacheType == CacheTypeData) {
+          HiiSetString (mHiiHandle, STR_PROCESSOR_L1_DATA_CACHE_VALUE, NewString, NULL);
+        }
+        break;
+      case 1:
+        //
+        // Level 2 Cache
+        //
+        HiiSetString (mHiiHandle, STR_PROCESSOR_L2_CACHE_VALUE, NewString, NULL);
+        break;
+      default:
+        break;
+      }
+      HiiSetString (mHiiHandle, STR_PROCESSOR_MICROCODE_VALUE, NewString, NULL);
+    }
+    if (SmbiosRecord->Type == EFI_SMBIOS_TYPE_MEMORY_DEVICE) {
+      Type17Record = (SMBIOS_TABLE_TYPE17 *) SmbiosRecord;
+      if (Type17Record->Size > 0) {
+        if ((Type17Record->Size & BIT15) != 0) {
+          //
+          // Size is in KB
+          //
+          TotalMemorySize = TotalMemorySize + Type17Record->Size;
+        } else {
+          //
+          // Size is in MB
+          //
+          TotalMemorySize = TotalMemorySize + (UINTN)LShiftU64 (Type17Record->Size, 10);
+        }
+        if (Type17Record->Speed < MemorySpeed) {
+          MemorySpeed = Type17Record->Speed;
+        }
+      }
+    }
+
     if (SmbiosRecord->Type == EFI_SMBIOS_TYPE_BIOS_INFORMATION) {
       Type0Record = (SMBIOS_TABLE_TYPE0 *) SmbiosRecord;
       StrIndex = Type0Record->BiosVersion;
@@ -890,6 +572,16 @@ UpdateAdditionalInformation (
     }
   } while (!EFI_ERROR(Status));
 
+  if ((TotalMemorySize % 1024) != 0) {
+    UnicodeSPrint (NewString, sizeof (NewString), L"%d.%d GB", TotalMemorySize / 1024, ((TotalMemorySize % 1024) * 100) / 1024);
+  } else {
+    UnicodeSPrint (NewString, sizeof (NewString), L"%d GB", TotalMemorySize / 1024);
+  }
+  HiiSetString (mHiiHandle, STR_TOTAL_MEMORY_SIZE_VALUE, NewString, NULL);
+
+  UnicodeSPrint (NewString, sizeof (NewString), L"%d MHz", MemorySpeed);
+  HiiSetString(mHiiHandle, STR_SYSTEM_MEMORY_SPEED_VALUE, NewString, NULL);
+
   UpdateLatestBootTime();
 
   return  EFI_SUCCESS;
@@ -899,22 +591,29 @@ VOID
 UpdateCPUInformation ()
 {
   CHAR16								Buffer[40];
-  UINT16                                FamilyId;
-  UINT8                                 Model;
-  UINT8                                 SteppingId;
-  UINT8                                 ProcessorType;
+  UINT32                                FamilyId;
+  UINT32                                Model;
+  UINT32                                SteppingId;
   EFI_STATUS                            Status;
   EFI_MP_SERVICES_PROTOCOL              *MpService;
   UINTN                                 MaximumNumberOfCPUs;
   UINTN                                 NumberOfEnabledCPUs;
   UINT32								Buffer32 = 0xFFFFFFFF;   // Keep buffer with unknown device
+  CPUID_VERSION_INFO_EAX  Eax;
+  CPUID_VERSION_INFO_EBX  Ebx;
+  CPUID_VERSION_INFO_ECX  Ecx;
+  CPUID_VERSION_INFO_EDX  Edx;
 
-  EfiCpuVersion (&FamilyId, &Model, &SteppingId, &ProcessorType);
-
-  //
-  //we need raw Model data
-  //
-  Model = Model & 0xf;
+  AsmCpuid (CPUID_VERSION_INFO, &Eax.Uint32, &Ebx.Uint32, &Ecx.Uint32, &Edx.Uint32);
+  FamilyId = Eax.Bits.FamilyId;
+  if (Eax.Bits.FamilyId == 0x0F) {
+    FamilyId |= (Eax.Bits.ExtendedFamilyId << 4);
+  }
+  Model = Eax.Bits.Model;
+  if (Eax.Bits.FamilyId == 0x06 || Eax.Bits.FamilyId == 0x0f) {
+    Model |= (Eax.Bits.ExtendedModelId << 4);
+  }
+  SteppingId = Eax.Bits.SteppingId;
 
   //
   //Family/Model/Step
@@ -942,7 +641,7 @@ UpdateCPUInformation ()
   //
   // Update Mobile / Desktop / Tablet SKU
   //
-  Buffer32 =(UINT32) RShiftU64 (EfiReadMsr (MSR_IA32_PLATFORM_ID), 50) & 0x07;
+  Buffer32 =(UINT32) RShiftU64 (AsmReadMsr64 (MSR_IA32_PLATFORM_ID), 50) & 0x07;
 
   switch(Buffer32){
       case 0x0:
@@ -1172,11 +871,6 @@ UpdatePlatformInformation (
 {
   UINT32                   MicroCodeVersion;
   CHAR16                   Buffer[40];
-  UINT8                    IgdVBIOSRevH;
-  UINT8                    IgdVBIOSRevL;
-  UINT16                   EDX;
-  EFI_IA32_REGISTER_SET    RegSet;
-  EFI_LEGACY_BIOS_PROTOCOL *LegacyBios = NULL;
   EFI_STATUS               Status;
   UINT8                    CpuFlavor=0;
   EFI_PEI_HOB_POINTERS     GuidHob;
@@ -1202,35 +896,6 @@ UpdatePlatformInformation (
     }
   }
 
-  //
-  //VBIOS version
-  //
-  Status = gBS->LocateProtocol(
-                  &gEfiLegacyBiosProtocolGuid,
-                  NULL,
-                  (void **)&LegacyBios
-                  );
-  if (!EFI_ERROR (Status)) {
-  RegSet.X.AX = 0x5f01;
-  Status = LegacyBios->Int86 (LegacyBios, 0x10, &RegSet);
-  ASSERT_EFI_ERROR(Status);
-
-  //
-  // simulate AMI int15 (ax=5f01) handler
-  // check NbInt15.asm in AMI code for asm edition
-  //
-  EDX = (UINT16)((RegSet.E.EBX >> 16) & 0xffff);
-  IgdVBIOSRevH = (UINT8)(((EDX & 0x0F00) >> 4) | (EDX & 0x000F));
-  IgdVBIOSRevL = (UINT8)(((RegSet.X.BX & 0x0F00) >> 4) | (RegSet.X.BX & 0x000F));
-
-  if (IgdVBIOSRevH==0 && IgdVBIOSRevL==0){
-    HiiSetString(mHiiHandle, STRING_TOKEN(STR_CHIP_IGD_VBIOS_REV_VALUE), L"N/A", NULL);
-  } else {
-    UnicodeSPrint (Buffer, sizeof (Buffer), L"%02X%02X", IgdVBIOSRevH,IgdVBIOSRevL);
-    HiiSetString(mHiiHandle, STRING_TOKEN(STR_CHIP_IGD_VBIOS_REV_VALUE), Buffer, NULL);
-    }
-  }
-
   Status = GetGOPDriverName(Name);
 
   if (!EFI_ERROR(Status))
@@ -1246,7 +911,7 @@ UpdatePlatformInformation (
   // VLV-QC Desktop       010
   // VLV-QC Notebook      011
   //
-  CpuFlavor = RShiftU64 (EfiReadMsr (MSR_IA32_PLATFORM_ID), 50) & 0x07;
+  CpuFlavor = RShiftU64 (AsmReadMsr64 (MSR_IA32_PLATFORM_ID), 50) & 0x07;
 
   switch(CpuFlavor){
     case 0x0:
@@ -1381,9 +1046,9 @@ UpdatePlatformInformation (
   //
   // Microcode Revision
   //
-  EfiWriteMsr (EFI_MSR_IA32_BIOS_SIGN_ID, 0);
-  EfiCpuid (EFI_CPUID_VERSION_INFO, NULL);
-  MicroCodeVersion = (UINT32) RShiftU64 (EfiReadMsr (EFI_MSR_IA32_BIOS_SIGN_ID), 32);
+  AsmWriteMsr64 (MSR_IA32_BIOS_SIGN_ID, 0);
+  AsmCpuid (CPUID_VERSION_INFO, NULL, NULL, NULL, NULL);
+  MicroCodeVersion = (UINT32) RShiftU64 (AsmReadMsr64 (MSR_IA32_BIOS_SIGN_ID), 32);
   UnicodeSPrint (Buffer, sizeof (Buffer), L"%x", MicroCodeVersion);
   HiiSetString(mHiiHandle,STRING_TOKEN(STR_PROCESSOR_MICROCODE_VALUE), Buffer, NULL);
 
@@ -1791,60 +1456,9 @@ CheckSystemConfigLoad(SYSTEM_CONFIGURATION *SystemConfigPtr)
   }
 }
 
-
-//
-// "SecureBootEnable" variable for the Secure boot feature enable/disable.
-//
-#define EFI_SECURE_BOOT_ENABLE_NAME      L"SecureBootEnable"
-extern EFI_GUID gEfiSecureBootEnableDisableGuid;
-
-
 VOID
 CheckSystemConfigSave(SYSTEM_CONFIGURATION *SystemConfigPtr)
 {
-  EFI_STATUS              Status;
-  UINT8                   SecureBootCfg;
-  BOOLEAN                 SecureBootNotFound;
-  UINTN                   DataSize;
-
-
-    //
-    // Secure Boot configuration changes
-	//
-    DataSize = sizeof(SecureBootCfg);
-    SecureBootNotFound = FALSE;
-    Status = gRT->GetVariable (
-                    EFI_SECURE_BOOT_ENABLE_NAME,
-                    &gEfiSecureBootEnableDisableGuid,
-                    NULL,
-                    &DataSize,
-                    &SecureBootCfg
-                    );
-
-    if (EFI_ERROR(Status)) {
-      SecureBootNotFound = TRUE;
-    }
-    if (SecureBootNotFound) {
-      Status = gRT->GetVariable (
-                      EFI_SECURE_BOOT_ENABLE_NAME,
-                      &gEfiSecureBootEnableDisableGuid,
-                      NULL,
-                      &DataSize,
-                      &SecureBootCfg
-                      );
-      ASSERT_EFI_ERROR(Status);
-    }
-    if ((SecureBootCfg) != SystemConfigPtr->SecureBoot) {
-      SecureBootCfg = !SecureBootCfg;
-      Status = gRT->SetVariable (
-                      EFI_SECURE_BOOT_ENABLE_NAME,
-                      &gEfiSecureBootEnableDisableGuid,
-                      EFI_VARIABLE_NON_VOLATILE | EFI_VARIABLE_BOOTSERVICE_ACCESS,
-                      sizeof (UINT8),
-                      &SecureBootCfg
-                      );
-    }
-
 }
 
 VOID

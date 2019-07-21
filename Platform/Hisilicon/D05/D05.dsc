@@ -71,8 +71,6 @@
   OemAddressMapLib|Platform/Hisilicon/D05/Library/OemAddressMapD05/OemAddressMapD05.inf
   PlatformSysCtrlLib|Silicon/Hisilicon/Hi1616/Library/PlatformSysCtrlLibHi1616/PlatformSysCtrlLibHi1616.inf
 
-  GenericBdsLib|IntelFrameworkModulePkg/Library/GenericBdsLib/GenericBdsLib.inf
-  PlatformBdsLib|Silicon/Hisilicon/Library/PlatformIntelBdsLib/PlatformIntelBdsLib.inf
   BmcConfigBootLib|Silicon/Hisilicon/Library/BmcConfigBootLib/BmcConfigBootLib.inf
   UefiBootManagerLib|MdeModulePkg/Library/UefiBootManagerLib/UefiBootManagerLib.inf
   SortLib|MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
@@ -433,7 +431,8 @@
 
   Platform/Hisilicon/D05/MemoryInitPei/MemoryInitPeim.inf
   ArmPkg/Drivers/CpuPei/CpuPei.inf
-  IntelFrameworkModulePkg/Universal/StatusCode/Pei/StatusCodePei.inf
+  MdeModulePkg/Universal/ReportStatusCodeRouter/Pei/ReportStatusCodeRouterPei.inf
+  MdeModulePkg/Universal/StatusCodeHandler/Pei/StatusCodeHandlerPei.inf
   MdeModulePkg/Universal/FaultTolerantWritePei/FaultTolerantWritePei.inf
   MdeModulePkg/Universal/Variable/Pei/VariablePei.inf
 
@@ -444,7 +443,7 @@
 
   MdeModulePkg/Core/DxeIplPeim/DxeIpl.inf {
     <LibraryClasses>
-      NULL|IntelFrameworkModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
+      NULL|MdeModulePkg/Library/LzmaCustomDecompressLib/LzmaCustomDecompressLib.inf
   }
 
   #
@@ -503,7 +502,8 @@
   ArmPkg/Drivers/TimerDxe/TimerDxe.inf
 
   MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
-  IntelFrameworkModulePkg/Universal/StatusCode/RuntimeDxe/StatusCodeRuntimeDxe.inf
+  MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
+  MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
   #
   #ACPI
   #

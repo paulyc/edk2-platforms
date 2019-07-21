@@ -1,10 +1,8 @@
 /*++
 
-Copyright (c) 2009 - 2014, Intel Corporation. All rights reserved.<BR>
-                                                                                   
-  SPDX-License-Identifier: BSD-2-Clause-Patent
-                                                                                   
+Copyright (c) 2009 - 2019, Intel Corporation. All rights reserved.<BR>
 
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 Module Name:
 
@@ -54,14 +52,14 @@ AddSmbiosManuCallback (
   UINTN                             PdNameStrLen;
   UINTN                             SerialNumStrLen;
   UINTN                             SkuNumberStrLen;
-  UINTN				                FamilyNameStrLen;
+  UINTN                             FamilyNameStrLen;
   EFI_STATUS                        Status;
   EFI_STRING                        Manufacturer;
   EFI_STRING                        ProductName;
   EFI_STRING                        Version;
   EFI_STRING                        SerialNumber;
   EFI_STRING                        SkuNumber;
-  EFI_STRING			            FamilyName;
+  EFI_STRING                        FamilyName;
   STRING_REF                        TokenToGet;
   EFI_SMBIOS_HANDLE                 SmbiosHandle;
   SMBIOS_TABLE_TYPE1                *SmbiosRecord;
@@ -214,13 +212,17 @@ AddSmbiosManuCallback (
   //
   //Get the MAC string
   //
-  Status = NetLibGetMacString (
-             *Handles,
-             NULL,
-             &MacStr
-             );
-  if (EFI_ERROR (Status)) {	
-    return Status;
+  if (Handles == NULL) {
+    Status = EFI_NOT_FOUND;
+  } else {
+    Status = NetLibGetMacString (
+               *Handles,
+               NULL,
+               &MacStr
+               );
+  }
+  if (EFI_ERROR (Status)) {
+    MacStr = L"000000000000";
   }
   SerialNumber = MacStr; 
   SerialNumStrLen = StrLen(SerialNumber);
@@ -325,40 +327,37 @@ MISC_SMBIOS_TABLE_FUNCTION(MiscSystemManufacturer)
 {
   EFI_STATUS                    Status;
   static BOOLEAN                CallbackIsInstalledManu = FALSE;
-  VOID                           *AddSmbiosManuCallbackNotifyReg;
-  EFI_EVENT                      AddSmbiosManuCallbackEvent;
+  VOID                          *AddSmbiosManuCallbackNotifyReg;
+  EFI_EVENT                     AddSmbiosManuCallbackEvent;
 
 
   if (CallbackIsInstalledManu == FALSE) {
     CallbackIsInstalledManu = TRUE;        	// Prevent more than 1 callback.
     DEBUG ((EFI_D_INFO, "Create Smbios Manu callback.\n"));
 
-  //
-  // gEfiDxeSmmReadyToLockProtocolGuid is ready
-  //
-  Status = gBS->CreateEvent (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_CALLBACK,
-                  (EFI_EVENT_NOTIFY)AddSmbiosManuCallback,
-                  RecordData,
-                  &AddSmbiosManuCallbackEvent
-                  );
+    //
+    // gEfiDxeSmmReadyToLockProtocolGuid is ready
+    //
+    Status = gBS->CreateEvent (
+                    EVT_NOTIFY_SIGNAL,
+                    TPL_CALLBACK,
+                    (EFI_EVENT_NOTIFY)AddSmbiosManuCallback,
+                    RecordData,
+                    &AddSmbiosManuCallbackEvent
+                    );
 
-  ASSERT_EFI_ERROR (Status);
-  if (EFI_ERROR (Status)) {
+    ASSERT_EFI_ERROR (Status);
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+
+    Status = gBS->RegisterProtocolNotify (
+                    &gEfiDxeSmmReadyToLockProtocolGuid,
+                    AddSmbiosManuCallbackEvent,
+                    &AddSmbiosManuCallbackNotifyReg
+                    );
     return Status;
-
-  }
-
-  Status = gBS->RegisterProtocolNotify (
-                  &gEfiDxeSmmReadyToLockProtocolGuid,
-                  AddSmbiosManuCallbackEvent,
-                  &AddSmbiosManuCallbackNotifyReg
-                  );
-
-  return Status;
   }
 
   return EFI_SUCCESS;
-
 }

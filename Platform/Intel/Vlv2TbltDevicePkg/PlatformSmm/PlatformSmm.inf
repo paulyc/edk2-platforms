@@ -1,11 +1,8 @@
 #
 #
-# Copyright (c)  1999  - 2018, Intel Corporation. All rights reserved
-#                                                                                  
-# SPDX-License-Identifier: BSD-2-Clause-Patent
-
-#                                                                                  
+# Copyright (c)  1999  - 2019, Intel Corporation. All rights reserved
 #
+# SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 #  Module Name:
 #
@@ -39,6 +36,7 @@
 [LibraryClasses]
   UefiDriverEntryPoint
   UefiBootServicesTableLib
+  SmmServicesTableLib
   DebugLib
   IoLib
   BaseLib
@@ -51,42 +49,30 @@
 
 [Guids]
   gEfiSetupVariableGuid
-  gDmiDataGuid
-  gEfiAcpiVariableCompatiblityGuid
-  gEfiPciLanInfoGuid
-  gEfiPciLanInfoGuid
-
-[FeaturePcd]
-  gEfiMdeModulePkgTokenSpaceGuid.PcdDxeIplSwitchToLongMode
 
 [Protocols]
-  gEfiSmmBase2ProtocolGuid
   gEfiSmmIchnDispatchProtocolGuid
   gEfiGlobalNvsAreaProtocolGuid
-  gEfiSmmSwDispatchProtocolGuid
-  gEfiSmmPowerButtonDispatchProtocolGuid
-  gEfiSmmSxDispatchProtocolGuid
+  gEfiSmmSwDispatch2ProtocolGuid
+  gEfiSmmPowerButtonDispatch2ProtocolGuid
+  gEfiSmmSxDispatch2ProtocolGuid
   gEfiSmmVariableProtocolGuid
-  gEfiCpuIo2ProtocolGuid
 
 [Packages]
   MdePkg/MdePkg.dec
   MdeModulePkg/MdeModulePkg.dec
-  IntelFrameworkPkg/IntelFrameworkPkg.dec
   Vlv2DeviceRefCodePkg/Vlv2DeviceRefCodePkg.dec
   Vlv2TbltDevicePkg/PlatformPkg.dec
-  IntelFrameworkModulePkg/IntelFrameworkModulePkg.dec
 
 [Pcd.common]
   gEfiMdePkgTokenSpaceGuid.PcdPciExpressBaseAddress
 
 [Depex]
-  gEfiSmmBase2ProtocolGuid                 AND
-  gEfiSmmAccess2ProtocolGuid               AND
-  gEfiSmmPowerButtonDispatchProtocolGuid  AND
-  gEfiSmmSxDispatchProtocolGuid           AND
+  gEfiSmmAccess2ProtocolGuid              AND
+  gEfiSmmPowerButtonDispatch2ProtocolGuid AND
+  gEfiSmmSxDispatch2ProtocolGuid          AND
   gEfiSmmIchnDispatchProtocolGuid         AND
-  gEfiSmmSwDispatchProtocolGuid           AND
+  gEfiSmmSwDispatch2ProtocolGuid          AND
   gEfiVariableArchProtocolGuid            AND
   gEfiVariableWriteArchProtocolGuid       AND
   gEfiGlobalNvsAreaProtocolGuid

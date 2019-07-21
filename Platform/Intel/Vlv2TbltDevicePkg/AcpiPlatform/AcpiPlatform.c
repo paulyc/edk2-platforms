@@ -34,12 +34,8 @@ Abstract:
 #include <Guid/GlobalVariable.h>
 #include <Guid/SetupVariable.h>
 #include <Guid/PlatformInfo.h>
-#include <Protocol/CpuIo.h>
 #include <Guid/BoardFeatures.h>
-#include <Protocol/AcpiSupport.h>
-#include <Protocol/AcpiS3Save.h>
-#include <Protocol/Ps2Policy.h>
-#include <Library/CpuIA32.h>
+#include <Protocol/AcpiTable.h>
 #include <SetupMode.h>
 #include <Guid/AcpiTableStorage.h>
 #include <Guid/EfiVpdData.h>
@@ -54,7 +50,6 @@ CHAR16    gACPIOSFRModelStringVariableName[] = ACPI_OSFR_MODEL_STRING_VARIABLE_N
 CHAR16    gACPIOSFRRefDataBlockVariableName[] = ACPI_OSFR_REF_DATA_BLOCK_VARIABLE_NAME;
 CHAR16    gACPIOSFRMfgStringVariableName[] = ACPI_OSFR_MFG_STRING_VARIABLE_NAME;
 
-EFI_CPU_IO_PROTOCOL                    *mCpuIo;
 EFI_GLOBAL_NVS_AREA_PROTOCOL            mGlobalNvsArea;
 #ifndef __GNUC__
 #pragma optimize("", off)
@@ -145,15 +140,15 @@ LocateSupportProtocol (
     //
     // See if it has the ACPI storage file.
     //
-    Status = ((EFI_FIRMWARE_VOLUME_PROTOCOL *) (*Instance))->ReadFile (
-                                                              *Instance,
-                                                              &gEfiAcpiTableStorageGuid,
-                                                              NULL,
-                                                              &Size,
-                                                              &FileType,
-                                                              &Attributes,
-                                                              &FvStatus
-                                                              );
+    Status = ((EFI_FIRMWARE_VOLUME2_PROTOCOL *) (*Instance))->ReadFile (
+                                                                *Instance,
+                                                                &gEfiAcpiTableStorageGuid,
+                                                                NULL,
+                                                                &Size,
+                                                                &FileType,
+                                                                &Attributes,
+                                                                &FvStatus
+                                                                );
 
     //
     // If we found it, then we are done.
@@ -636,14 +631,11 @@ OnReadyToBoot (
   )
 {
   EFI_STATUS                  Status;
-  EFI_ACPI_TABLE_VERSION      TableVersion;
-  EFI_ACPI_SUPPORT_PROTOCOL   *AcpiSupport;
-  EFI_ACPI_S3_SAVE_PROTOCOL   *AcpiS3Save;
   SYSTEM_CONFIGURATION        SetupVarBuffer;
   UINTN                       VariableSize;
   EFI_PLATFORM_CPU_INFO       *PlatformCpuInfoPtr = NULL;
   EFI_PLATFORM_CPU_INFO       PlatformCpuInfo;
-  EFI_PEI_HOB_POINTERS          GuidHob;
+  EFI_PEI_HOB_POINTERS        GuidHob;
 
   if (mFirstNotify) {
     return;
@@ -705,32 +697,6 @@ OnReadyToBoot (
               );
     ASSERT_EFI_ERROR (Status);
   }
-
-  //
-  // Find the AcpiSupport protocol.
-  //
-  Status = LocateSupportProtocol (&gEfiAcpiSupportProtocolGuid, (VOID **) &AcpiSupport, 0);
-  ASSERT_EFI_ERROR (Status);
-
-  TableVersion = EFI_ACPI_TABLE_VERSION_2_0;
-
-  //
-  // Publish ACPI 1.0 or 2.0 Tables.
-  //
-  Status = AcpiSupport->PublishTables (
-                          AcpiSupport,
-                          TableVersion
-                          );
-  ASSERT_EFI_ERROR (Status);
-
-  //
-  // S3 script save.
-  //
-  Status = gBS->LocateProtocol (&gEfiAcpiS3SaveProtocolGuid, NULL, (VOID **) &AcpiS3Save);
-  if (!EFI_ERROR (Status)) {
-    AcpiS3Save->S3Save (AcpiS3Save, NULL);
-  }
-
 }
 
 VOID
@@ -772,21 +738,18 @@ AcpiPlatformEntryPoint (
 {
   EFI_STATUS                    Status;
   EFI_STATUS                    AcpiStatus;
-  EFI_ACPI_SUPPORT_PROTOCOL     *AcpiSupport;
-  EFI_FIRMWARE_VOLUME2_PROTOCOL  *FwVol;
+  EFI_ACPI_TABLE_PROTOCOL       *AcpiTable;
+  EFI_FIRMWARE_VOLUME2_PROTOCOL *FwVol;
   INTN                          Instance;
   EFI_ACPI_COMMON_HEADER        *CurrentTable;
   UINTN                         TableHandle;
   UINT32                        FvStatus;
   UINTN                         Size;
   EFI_EVENT                     Event;
-  EFI_ACPI_TABLE_VERSION        TableVersion;
   UINTN                         VarSize;
   UINTN                         SysCfgSize;
   EFI_HANDLE                    Handle;
-  EFI_PS2_POLICY_PROTOCOL       *Ps2Policy;
   EFI_PEI_HOB_POINTERS          GuidHob;
-  UINT8                         PortData;
   EFI_MP_SERVICES_PROTOCOL      *MpService;
   UINTN                         MaximumNumberOfCPUs;
   UINTN                         NumberOfEnabledCPUs;
@@ -794,7 +757,6 @@ AcpiPlatformEntryPoint (
 
   mFirstNotify      = FALSE;
 
-  TableVersion      = EFI_ACPI_TABLE_VERSION_2_0;
   Instance          = 0;
   CurrentTable      = NULL;
   TableHandle       = 0;
@@ -836,9 +798,9 @@ AcpiPlatformEntryPoint (
   }
 
   //
-  // Find the AcpiSupport protocol.
+  // Find the AcpiTable protocol.
   //
-  Status = LocateSupportProtocol (&gEfiAcpiSupportProtocolGuid, (VOID **) &AcpiSupport, 0);
+  Status = LocateSupportProtocol (&gEfiAcpiTableProtocolGuid, (VOID **) &AcpiTable, 0);
   ASSERT_EFI_ERROR (Status);
 
   //
@@ -1142,65 +1104,8 @@ AcpiPlatformEntryPoint (
   //
   // SIO related option.
   //
-  Status = gBS->LocateProtocol (&gEfiCpuIoProtocolGuid, NULL, (void **)&mCpuIo);
-  ASSERT_EFI_ERROR (Status);
-
   mGlobalNvsArea.Area->WPCN381U = GLOBAL_NVS_DEVICE_DISABLE;
-
   mGlobalNvsArea.Area->DockedSioPresent = GLOBAL_NVS_DEVICE_DISABLE;
-
-  if (mGlobalNvsArea.Area->DockedSioPresent != GLOBAL_NVS_DEVICE_ENABLE) {
-    //
-    // Check ID for SIO WPCN381U.
-    //
-    Status = mCpuIo->Io.Read (
-                          mCpuIo,
-                          EfiCpuIoWidthUint8,
-                          WPCN381U_CONFIG_INDEX,
-                          1,
-                          &PortData
-                          );
-    ASSERT_EFI_ERROR (Status);
-    if (PortData != 0xFF) {
-      PortData = 0x20;
-      Status = mCpuIo->Io.Write (
-                            mCpuIo,
-                            EfiCpuIoWidthUint8,
-                            WPCN381U_CONFIG_INDEX,
-                            1,
-                            &PortData
-                            );
-      ASSERT_EFI_ERROR (Status);
-      Status = mCpuIo->Io.Read (
-                            mCpuIo,
-                            EfiCpuIoWidthUint8,
-                            WPCN381U_CONFIG_DATA,
-                            1,
-                            &PortData
-                            );
-      ASSERT_EFI_ERROR (Status);
-      if ((PortData == WPCN381U_CHIP_ID) || (PortData == WDCP376_CHIP_ID)) {
-        mGlobalNvsArea.Area->WPCN381U = GLOBAL_NVS_DEVICE_ENABLE;
-        mGlobalNvsArea.Area->OnboardCom = GLOBAL_NVS_DEVICE_ENABLE;
-        mGlobalNvsArea.Area->OnboardComCir = GLOBAL_NVS_DEVICE_DISABLE;
-      }
-    }
-  }
-
-
-
-  //
-  // Get Ps2 policy to set. Will be use if present.
-  //
-  Status =  gBS->LocateProtocol (
-                   &gEfiPs2PolicyProtocolGuid,
-                   NULL,
-                   (VOID **)&Ps2Policy
-                   );
-  if (!EFI_ERROR (Status)) {
-          Status = Ps2Policy->Ps2InitHardware (ImageHandle);
-  }
-
   mGlobalNvsArea.Area->SDIOMode = mSystemConfiguration.LpssSdioMode;
 
   Handle = NULL;
@@ -1243,11 +1148,10 @@ AcpiPlatformEntryPoint (
           // Add the table.
           //
           TableHandle = 0;
-          AcpiStatus = AcpiSupport->SetAcpiTable (
-                                      AcpiSupport,
+          AcpiStatus = AcpiTable->InstallAcpiTable (
+                                      AcpiTable,
                                       CurrentTable,
-                                      TRUE,
-                                      TableVersion,
+                                      CurrentTable->Length,
                                       &TableHandle
                                       );
           ASSERT_EFI_ERROR (AcpiStatus);
@@ -1261,12 +1165,8 @@ AcpiPlatformEntryPoint (
     }
   }
 
-  Status = EfiCreateEventReadyToBootEx (
-             TPL_NOTIFY,
-             OnReadyToBoot,
-             NULL,
-             &Event
-             );
+  Event = NULL;
+  OnReadyToBoot (Event, NULL);
 
   //
   // Finished.

@@ -1,10 +1,8 @@
 /** @file
 
-  Copyright (c) 2004  - 2014, Intel Corporation. All rights reserved.<BR>
-                                                                                   
-  SPDX-License-Identifier: BSD-2-Clause-Patent
+  Copyright (c) 2004  - 2019, Intel Corporation. All rights reserved.<BR>
 
-                                                                                   
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 Module Name:
 
@@ -18,7 +16,6 @@ Abstract:
 --*/
 
 #include "SmmPlatform.h"
-#include <Protocol/CpuIo2.h>
 
 
 //
@@ -70,25 +67,8 @@ UINT8 mTco1Sources[] = {
   IchnNmi
 };
 
-UINTN
-DevicePathSize (
-  IN EFI_DEVICE_PATH_PROTOCOL  *DevicePath
-  );
-
 VOID
 S4S5ProgClock();
-
-EFI_STATUS
-InitRuntimeScriptTable (
-  IN EFI_SYSTEM_TABLE  *SystemTable
-  );
-
-VOID
-S5SleepWakeOnRtcCallBack (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SX_DISPATCH_CONTEXT   *DispatchContext
-  );
-
 
 VOID
 EnableS5WakeOnRtc();
@@ -97,12 +77,6 @@ UINT8
 HexToBcd(
   UINT8 HexValue
   );
-
-UINT8
-BcdToHex(
-  IN UINT8 BcdValue
-  );
-
 
 VOID
 CpuSmmSxWorkAround(
@@ -127,14 +101,14 @@ InitializePlatformSmm (
   EFI_STATUS                                Status;
   UINT8                                     Index;
   EFI_HANDLE                                Handle;
-  EFI_SMM_POWER_BUTTON_DISPATCH_CONTEXT     PowerButtonContext;
-  EFI_SMM_POWER_BUTTON_DISPATCH_PROTOCOL    *PowerButtonDispatch;
+  EFI_SMM_POWER_BUTTON_REGISTER_CONTEXT     PowerButtonContext;
+  EFI_SMM_POWER_BUTTON_DISPATCH2_PROTOCOL   *PowerButtonDispatch;
   EFI_SMM_ICHN_DISPATCH_CONTEXT             IchnContext;
   EFI_SMM_ICHN_DISPATCH_PROTOCOL            *IchnDispatch;
-  EFI_SMM_SX_DISPATCH_PROTOCOL              *SxDispatch;
-  EFI_SMM_SX_DISPATCH_CONTEXT               EntryDispatchContext;
-  EFI_SMM_SW_DISPATCH_PROTOCOL              *SwDispatch;
-  EFI_SMM_SW_DISPATCH_CONTEXT               SwContext;
+  EFI_SMM_SX_DISPATCH2_PROTOCOL             *SxDispatch;
+  EFI_SMM_SX_REGISTER_CONTEXT               EntryDispatchContext;
+  EFI_SMM_SW_DISPATCH2_PROTOCOL             *SwDispatch;
+  EFI_SMM_SW_REGISTER_CONTEXT               SwContext;
   UINTN                                     VarSize;
   EFI_BOOT_MODE                             BootMode;
 
@@ -197,18 +171,18 @@ InitializePlatformSmm (
   //
   // Get the Power Button protocol
   //
-  Status = gBS->LocateProtocol(
-                  &gEfiSmmPowerButtonDispatchProtocolGuid,
-                  NULL,
-                  (void **)&PowerButtonDispatch
-                  );
+  Status = gSmst->SmmLocateProtocol(
+                    &gEfiSmmPowerButtonDispatch2ProtocolGuid,
+                    NULL,
+                    (VOID **)&PowerButtonDispatch
+                    );
   ASSERT_EFI_ERROR(Status);
 
   if (BootMode != BOOT_ON_FLASH_UPDATE) {
     //
     // Register for the power button event
     //
-    PowerButtonContext.Phase = PowerButtonEntry;
+    PowerButtonContext.Phase = EfiPowerButtonEntry;
     Status = PowerButtonDispatch->Register(
                                     PowerButtonDispatch,
                                     PowerButtonCallback,
@@ -220,11 +194,11 @@ InitializePlatformSmm (
   //
   // Get the Sx dispatch protocol
   //
-  Status = gBS->LocateProtocol (
-                  &gEfiSmmSxDispatchProtocolGuid,
-                  NULL,
-                                  (void **)&SxDispatch
-                  );
+  Status = gSmst->SmmLocateProtocol(
+                    &gEfiSmmSxDispatch2ProtocolGuid,
+                    NULL,
+                    (VOID **)&SxDispatch
+                    );
   ASSERT_EFI_ERROR(Status);
 
   //
@@ -235,7 +209,7 @@ InitializePlatformSmm (
 
   Status = SxDispatch->Register (
                          SxDispatch,
-                           (EFI_SMM_SX_DISPATCH)SxSleepEntryCallBack,
+                         SxSleepEntryCallBack,
                          &EntryDispatchContext,
                          &Handle
                          );
@@ -273,11 +247,11 @@ InitializePlatformSmm (
   //
   //  Get the Sw dispatch protocol
   //
-  Status = gBS->LocateProtocol (
-                  &gEfiSmmSwDispatchProtocolGuid,
-                  NULL,
-                                  (void **)&SwDispatch
-                  );
+  Status = gSmst->SmmLocateProtocol (
+                    &gEfiSmmSwDispatch2ProtocolGuid,
+                    NULL,
+                    (VOID **)&SwDispatch
+                    );
   ASSERT_EFI_ERROR(Status);
 
   //
@@ -367,11 +341,13 @@ InitializePlatformSmm (
   return EFI_SUCCESS;
 }
 
-VOID
+EFI_STATUS
 EFIAPI
 SmmReadyToBootCallback (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SW_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
   EFI_STATUS Status;
@@ -397,6 +373,7 @@ SmmReadyToBootCallback (
     mSetSmmVariableProtocolSmiAllowed = FALSE;
   }
 
+  return EFI_SUCCESS;
 }
 
 /**
@@ -411,8 +388,10 @@ SmmReadyToBootCallback (
 EFI_STATUS
 EFIAPI    
 SxSleepEntryCallBack (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SX_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
   EFI_STATUS              Status;
@@ -505,11 +484,13 @@ SetAfterG3On (
   When a power button event happens, it shuts off the machine
 
 **/
-VOID
+EFI_STATUS
 EFIAPI
 PowerButtonCallback (
-  IN  EFI_HANDLE                              DispatchHandle,
-  IN  EFI_SMM_POWER_BUTTON_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
   //
@@ -564,6 +545,8 @@ PowerButtonCallback (
   // Should not return
   //
   CpuDeadLoop();
+
+  return EFI_SUCCESS;
 }
 
 
@@ -573,11 +556,13 @@ PowerButtonCallback (
   @param DispatchContext - The predefined context which contained sleep type and phase
 
 **/
-VOID
+EFI_STATUS
 EFIAPI
 S5SleepAcLossCallBack (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SX_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
   //
@@ -587,6 +572,7 @@ S5SleepAcLossCallBack (
   if (mAcLossVariable == 1) {
     SetAfterG3On (TRUE);
   }
+  return EFI_SUCCESS;
 }
 
 /**
@@ -597,11 +583,13 @@ S5SleepAcLossCallBack (
   @retval Clears the Save State bit in the clock.
 
 **/
-VOID
+EFI_STATUS
 EFIAPI
 S4S5CallBack (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SX_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
 
@@ -616,6 +604,7 @@ S4S5CallBack (
     IoWrite32(GPIO_BASE_ADDRESS + R_PCH_GPIO_SC_LVL, Data32);
   }
 
+  return EFI_SUCCESS;
 }
 
 
@@ -650,16 +639,18 @@ S4S5ProgClock()
    Enable SCI
 
   @param DispatchHandle  - EFI Handle
-  @param DispatchContext - Pointer to the EFI_SMM_SW_DISPATCH_CONTEXT
+  @param DispatchContext - Pointer to the EFI_SMM_SW_REGISTER_CONTEXT
 
   @retval Nothing
 
 **/
-VOID
+EFI_STATUS
 EFIAPI
 EnableAcpiCallback (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SW_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
   UINT32 SmiEn;
@@ -716,7 +707,7 @@ EnableAcpiCallback (
   Pm1Cnt |= B_PCH_ACPI_PM1_CNT_SCI_EN;
   IoWrite16(mAcpiBaseAddr + R_PCH_ACPI_PM1_CNT, Pm1Cnt);
 
-
+  return EFI_SUCCESS;
 }
 
 /**
@@ -736,16 +727,18 @@ EnableAcpiCallback (
    Disable SCI
 
   @param DispatchHandle  - EFI Handle
-  @param DispatchContext - Pointer to the EFI_SMM_SW_DISPATCH_CONTEXT
+  @param DispatchContext - Pointer to the EFI_SMM_SW_REGISTER_CONTEXT
 
   @retval Nothing
 
 **/
-VOID
+EFI_STATUS
 EFIAPI
 DisableAcpiCallback (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SW_DISPATCH_CONTEXT   *DispatchContext
+  IN EFI_HANDLE  DispatchHandle,
+  IN CONST VOID  *Context         OPTIONAL,
+  IN OUT VOID    *CommBuffer      OPTIONAL,
+  IN OUT UINTN   *CommBufferSize  OPTIONAL
   )
 {
   UINT16 Pm1Cnt;
@@ -763,6 +756,7 @@ DisableAcpiCallback (
   Pm1Cnt &= ~B_PCH_ACPI_PM1_CNT_SCI_EN;
   IoWrite16(mAcpiBaseAddr + R_PCH_ACPI_PM1_CNT, Pm1Cnt);
 
+  return EFI_SUCCESS;
 }
 
 /**
@@ -777,46 +771,6 @@ DummyTco1Callback (
   IN  EFI_SMM_ICHN_DISPATCH_CONTEXT           *DispatchContext
   )
 {
-}
-
-UINTN
-DevicePathSize (
-  IN EFI_DEVICE_PATH_PROTOCOL  *DevicePath
-  )
-{
-  EFI_DEVICE_PATH_PROTOCOL     *Start;
-
-  if (DevicePath == NULL) {
-    return 0;
-  }
-
-  //
-  // Search for the end of the device path structure
-  //
-  Start = DevicePath;
-  while (!IsDevicePathEnd (DevicePath)) {
-    DevicePath = NextDevicePathNode (DevicePath);
-  }
-
-  //
-  // Compute the size and add back in the size of the end device path structure
-  //
-  return ((UINTN)DevicePath - (UINTN)Start) + sizeof(EFI_DEVICE_PATH_PROTOCOL);
-}
-
-/**
-
-  @param DispatchHandle   The handle of this callback, obtained when registering
-  @param DispatchContext  The predefined context which contained sleep type and phase
-
-**/
-VOID
-S5SleepWakeOnRtcCallBack (
-  IN  EFI_HANDLE                    DispatchHandle,
-  IN  EFI_SMM_SX_DISPATCH_CONTEXT   *DispatchContext
-  )
-{
-  EnableS5WakeOnRtc();
 }
 
 /**
@@ -979,19 +933,5 @@ HexToBcd(
   LowByte     = (UINTN)HexValue % 10;
 
   return ((UINT8)(LowByte + (HighByte << 4)));
-}
-
-UINT8
-BcdToHex(
-  IN UINT8 BcdValue
-  )
-{
-  UINTN   HighByte;
-  UINTN   LowByte;
-
-  HighByte    = (UINTN)((BcdValue >> 4) * 10);
-  LowByte     = (UINTN)(BcdValue & 0x0F);
-
-  return ((UINT8)(LowByte + HighByte));
 }
 

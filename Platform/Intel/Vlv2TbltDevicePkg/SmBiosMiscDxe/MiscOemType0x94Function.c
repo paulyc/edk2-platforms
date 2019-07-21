@@ -1,12 +1,8 @@
 /*++
 
-Copyright (c) 1999  - 2014, Intel Corporation.  All rights reserved.
-                                                                                   
+Copyright (c) 1999  - 2019, Intel Corporation.  All rights reserved.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
-
-                                                                                   
-
-
 
 Module Name:
 
@@ -21,9 +17,7 @@ Abstract:
 #include "CommonHeader.h"
 
 #include "MiscSubclassDriver.h"
-#include <Protocol/DataHub.h>
 #include <Library/HiiLib.h>
-#include <Protocol/CpuIo2.h>
 #include <Library/PrintLib.h>
 #include <Protocol/PciRootBridgeIo.h>
 #include <Protocol/SimpleNetwork.h>
@@ -32,12 +26,9 @@ Abstract:
 #include <Protocol/IdeControllerInit.h>
 #include <Protocol/MpService.h>
 #include <Protocol/PchPlatformPolicy.h>
-#include <Protocol/CpuIo2.h>
 #include <Protocol/I2cBus.h>
 
 #include <Library/IoLib.h>
-#include <Library/I2CLib.h>
-#include <Library/CpuIA32.h>
 #include <Library/UefiRuntimeServicesTableLib.h>
 #include <Guid/PlatformInfo.h>
 #include <Guid/SetupVariable.h>
@@ -81,7 +72,6 @@ SB_REV  SBRevisionTable[] = {
 #define PREFIX_ZERO   0x20
 
 #define ICH_REG_REV                 0x08
-#define MSR_IA32_PLATFORM_ID        0x17
 #define CHARACTER_NUMBER_FOR_VALUE  30
 
 
@@ -527,11 +517,6 @@ UpdatePlatformInformation (
 {
   UINT32                   MicroCodeVersion;
   CHAR16                   Buffer[40];
-  UINT8                    IgdVBIOSRevH;
-  UINT8                    IgdVBIOSRevL;
-  UINT16                   EDX;
-  EFI_IA32_REGISTER_SET    RegSet;
-  EFI_LEGACY_BIOS_PROTOCOL *LegacyBios = NULL;
   EFI_STATUS               Status;
   UINT8                    CpuFlavor=0;
   EFI_PEI_HOB_POINTERS     GuidHob;
@@ -561,34 +546,6 @@ UpdatePlatformInformation (
     }
   }
 
-  //
-  //VBIOS version
-  //
-  Status = gBS->LocateProtocol(
-                  &gEfiLegacyBiosProtocolGuid,
-                  NULL,
-                  (VOID **)&LegacyBios
-                  );
-
-  RegSet.X.AX = 0x5f01;
-  Status = LegacyBios->Int86 (LegacyBios, 0x10, &RegSet);
-  ASSERT_EFI_ERROR(Status);
-
-  //
-  // simulate AMI int15 (ax=5f01) handler
-  // check NbInt15.asm in AMI code for asm edition
-  //
-  EDX = (UINT16)((RegSet.E.EBX >> 16) & 0xffff);
-  IgdVBIOSRevH = (UINT8)(((EDX & 0x0F00) >> 4) | (EDX & 0x000F));
-  IgdVBIOSRevL = (UINT8)(((RegSet.X.BX & 0x0F00) >> 4) | (RegSet.X.BX & 0x000F));
-
-  if (IgdVBIOSRevH==0 && IgdVBIOSRevL==0) {
-    HiiSetString(mHiiHandle, STRING_TOKEN(STR_CHIP_IGD_VBIOS_REV_VALUE), L"N/A", NULL);
-  } else {
-    UnicodeSPrint (Buffer, sizeof (Buffer), L"%02X%02X", IgdVBIOSRevH,IgdVBIOSRevL);
-    HiiSetString(mHiiHandle, STRING_TOKEN(STR_CHIP_IGD_VBIOS_REV_VALUE), Buffer, NULL);
-  }
-
   Status = TGetGOPDriverName(Name);
 
   if(!EFI_ERROR(Status))
@@ -606,7 +563,7 @@ UpdatePlatformInformation (
   //
   //CPU flavor
   //
-  CpuFlavor = RShiftU64 (EfiReadMsr (MSR_IA32_PLATFORM_ID), 50) & 0x07;
+  CpuFlavor = RShiftU64 (AsmReadMsr64 (MSR_IA32_PLATFORM_ID), 50) & 0x07;
 
   switch(CpuFlavor){
     case 0x0:
@@ -702,9 +659,9 @@ UpdatePlatformInformation (
   //
   // Microcode Revision
   //
-  EfiWriteMsr (EFI_MSR_IA32_BIOS_SIGN_ID, 0);
-  EfiCpuid (EFI_CPUID_VERSION_INFO, NULL);
-  MicroCodeVersion = (UINT32) RShiftU64 (EfiReadMsr (EFI_MSR_IA32_BIOS_SIGN_ID), 32);
+  AsmWriteMsr64 (MSR_IA32_BIOS_SIGN_ID, 0);
+  AsmCpuid (CPUID_VERSION_INFO, NULL, NULL, NULL, NULL);
+  MicroCodeVersion = (UINT32) RShiftU64 (AsmReadMsr64 (MSR_IA32_BIOS_SIGN_ID), 32);
   UnicodeSPrint (Buffer, sizeof (Buffer), L"%x", MicroCodeVersion);
   HiiSetString(mHiiHandle,STRING_TOKEN(STR_MISC_PROCESSOR_MICROCODE_VALUE), Buffer, NULL);
 
